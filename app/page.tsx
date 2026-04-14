@@ -1149,14 +1149,23 @@ export default function Page() {
                       <th className="p-3 text-left font-semibold">Model</th>
                       <th className="p-3 text-left font-semibold">Status + Priority</th>
                       <th className="p-3 text-left font-semibold">Status Days</th>
-                      <th className="p-3 text-left font-semibold">Task Titles</th>
-                      <th className="p-3 text-left font-semibold">Body ECD</th>
+                      {selectedAlert.id === 'general-parts' ? (
+                        <th className="p-3 text-left font-semibold">Parts</th>
+                      ) : (
+                        <>
+                          <th className="p-3 text-left font-semibold">Task Titles</th>
+                          <th className="p-3 text-left font-semibold">Body ECD</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {selectedAlert.rows.map((r, i) => {
                       const delayed = isRowDelayed(r);
                       const jobNum = toText(r['Job Number']);
+                      const partsInfo = selectedAlert.id === 'general-parts'
+                        ? getPartsInfoForJob(jobNum, partsData)
+                        : null;
                       return (
                         <tr
                           key={`${selectedAlert.id}-row-${i}`}
@@ -1169,8 +1178,27 @@ export default function Page() {
                           <td className={`p-3 ${delayed ? 'font-bold text-red-600' : ''}`}>
                             {toText(r['Status Days'])}
                           </td>
-                          <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
-                          <td className="p-3">{toText(r['Body ECD'])}</td>
+                          {partsInfo ? (
+                            <td className="p-3 max-w-md">
+                              {partsInfo.arrived.length > 0 && (
+                                <span><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</span>
+                              )}
+                              {partsInfo.arrived.length > 0 && partsInfo.missing.length > 0 && (
+                                <span className="mx-1">·</span>
+                              )}
+                              {partsInfo.missing.length > 0 && (
+                                <span><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</span>
+                              )}
+                              {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && (
+                                <span className="text-slate-400 italic">No parts data</span>
+                              )}
+                            </td>
+                          ) : (
+                            <>
+                              <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
+                              <td className="p-3">{toText(r['Body ECD'])}</td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
