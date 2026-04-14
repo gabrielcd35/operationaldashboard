@@ -31,6 +31,23 @@ export async function GET() {
     }
 
     const json = JSON.parse(text);
+
+    // Normalize date strings in partsRows from "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS"
+    if (Array.isArray(json.partsRows)) {
+      const dateKeys = ['Received At', 'Ordered At', 'Checked Out At', 'Returned At'];
+      const spaceDate = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/;
+      json.partsRows = json.partsRows.map((row: Record<string, unknown>) => {
+        const normalized = { ...row };
+        for (const key of dateKeys) {
+          const val = normalized[key];
+          if (typeof val === 'string' && spaceDate.test(val)) {
+            normalized[key] = val.replace(' ', 'T');
+          }
+        }
+        return normalized;
+      });
+    }
+
     return Response.json(json);
   } catch (error) {
     return Response.json(
