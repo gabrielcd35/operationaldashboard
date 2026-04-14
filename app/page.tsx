@@ -318,7 +318,7 @@ function isRowDelayed(row: DashboardRow): boolean {
 // --- Parts Helpers ---
 
 function getPartJobNumber(part: PartsRow): string {
-  return toText(getColumnValue(part, ['Job Number', 'job number']));
+  return toText(getColumnValue(part, ['Job', 'job', 'Job Number', 'job number']));
 }
 
 function getPartName(part: PartsRow): string {
@@ -720,7 +720,7 @@ export default function Page() {
     updatedAt?: string;
     rows?: DashboardRow[];
     partsHeaders?: string[];
-    partsRows?: unknown[][];
+    partsRows?: unknown[];
   }>({});
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [selectedMainId, setSelectedMainId] = useState<string | null>(null);
@@ -767,13 +767,13 @@ export default function Page() {
   const rows = data.rows ?? [];
 
   const partsData = useMemo((): PartsRow[] => {
-    const headers = data.partsHeaders;
     const rawRows = data.partsRows;
-    if (!headers || !rawRows) return [];
+    if (!rawRows) return [];
     return rawRows.map((row) => {
       if (Array.isArray(row)) {
+        const headers = data.partsHeaders ?? [];
         const obj: PartsRow = {};
-        headers.forEach((h, i) => { obj[h] = row[i] as string | number | null | undefined; });
+        headers.forEach((h, i) => { obj[h] = (row as unknown[])[i] as string | number | null | undefined; });
         return obj;
       }
       return row as PartsRow;
