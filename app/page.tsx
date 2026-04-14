@@ -926,6 +926,22 @@ export default function Page() {
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
           <p className="mt-2 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
+          {/* TEMP DEBUG — remove after confirming parts data */}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600 select-none">Parts debug info</summary>
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] font-mono text-slate-700 space-y-1">
+              <p>partsData rows: <strong>{partsData.length}</strong></p>
+              {partsData.length > 0 && (
+                <>
+                  <p>Sample part keys: <strong>{Object.keys(partsData[0]).join(', ')}</strong></p>
+                  <p>Sample part[0] Job: <strong>{String(partsData[0]['Job'] ?? partsData[0]['job'] ?? partsData[0]['Job Number'] ?? '(none)')}</strong> | Part: <strong>{String(partsData[0]['Part'] ?? partsData[0]['part'] ?? '(none)')}</strong> | Received At: <strong>{String(partsData[0]['Received At'] ?? partsData[0]['received at'] ?? '(none)')}</strong></p>
+                </>
+              )}
+              {rows.length > 0 && (
+                <p>Sample dashboard row Job Number: <strong>{String(rows[0]['Job Number'] ?? '(none)')}</strong></p>
+              )}
+            </div>
+          </details>
         </section>
 
         {/* Main Stat Cards */}
