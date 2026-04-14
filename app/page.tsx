@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 // --- Types ---
 
 type DashboardRow = Record<string, string | number | null | undefined>;
+type PartsRow   = Record<string, string | number | null | undefined>;
 
 type AlertCard = {
   id: string;
@@ -13,8 +14,15 @@ type AlertCard = {
   rows: DashboardRow[];
   description: string;
   info: string;
-  section: 'Operations' | 'Parts' | 'Conventional';
-  detailType?: 'default' | 'sa-monthly-qc';
+  section: 'Operations' | 'Parts' | 'Conventional' | 'Inventory';
+  detailType?: 'default' | 'sa-monthly-qc' | 'must-return';
+};
+
+type MustReturnGroup = {
+  jobNumber: string;
+  parts: string[];
+  maxDays: number;
+  statusPriority: string;
 };
 
 type MainCard = {
@@ -305,6 +313,99 @@ function isRowDelayed(row: DashboardRow): boolean {
   if (isPostRepair(row)) return days >= 3;
   if (isReadyToDeliver(row)) return days > 2;
   return false;
+}
+
+// --- Parts Helpers ---
+
+function getPartJobNumber(part: PartsRow): string {
+  return toText(getColumnValue(part, ['Job Number', 'job number']));
+}
+
+function getPartName(part: PartsRow): string {
+  return toText(getColumnValue(part, ['Part', 'part', 'Part Name', 'part name']));
+}
+
+function getOrderedAt(part: PartsRow): Date | null {
+  return parseDateValue(getColumnValue(part, ['Ordered At', 'ordered at', 'ordered_at']));
+}
+
+function getReceivedAt(part: PartsRow): Date | null {
+  return parseDateValue(getColumnValue(part, ['Received At', 'received at', 'received_at']));
+}
+
+function getCheckedOutAt(part: PartsRow): Date | null {
+  return parseDateValue(getColumnValue(part, ['Checked Out At', 'checked out at', 'checked_out_at']));
+}
+
+function getReturnedAt(part: PartsRow): Date | null {
+  return parseDateValue(getColumnValue(part, ['Returned At', 'returned at', 'returned_at']));
+}
+
+function daysSince(date: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function getPartsInfoForJob(
+  jobNumber: string,
+  partsData: PartsRow[]
+): { arrived: string[]; missing: string[] } {
+  const jobParts = partsData.filter(
+    (p) => normalize(getPartJobNumber(p)) === normalize(jobNumber)
+  );
+  const arrived = jobParts
+    .filter((p) => getReceivedAt(p) !== null)
+    .map((p) => getPartName(p))
+    .filter(Boolean);
+  const missing = jobParts
+    .filter((p) => getOrderedAt(p) !== null && getReceivedAt(p) === null)
+    .map((p) => getPartName(p))
+    .filter(Boolean);
+  return { arrived, missing };
+}
+
+function buildMustReturnGroups(
+  partsData: PartsRow[],
+  rows: DashboardRow[]
+): MustReturnGroup[] {
+  const jobStatusMap = new Map<string, string>();
+  for (const row of rows) {
+    const jn = normalize(toText(row['Job Number']));
+    if (jn) jobStatusMap.set(jn, toText(row['Status + Priority']));
+  }
+
+  const qualifying = partsData.filter((part) => {
+    const received = getReceivedAt(part);
+    if (!received) return false;
+    if (getCheckedOutAt(part) !== null) return false;
+    if (getReturnedAt(part) !== null) return false;
+    return daysSince(received) >= 25;
+  });
+
+  const groups = new Map<string, { parts: string[]; maxDays: number }>();
+  for (const part of qualifying) {
+    const jn = getPartJobNumber(part);
+    if (!jn) continue;
+    const received = getReceivedAt(part)!;
+    const days = daysSince(received);
+    const existing = groups.get(jn);
+    if (existing) {
+      existing.parts.push(getPartName(part));
+      existing.maxDays = Math.max(existing.maxDays, days);
+    } else {
+      groups.set(jn, { parts: [getPartName(part)], maxDays: days });
+    }
+  }
+
+  return Array.from(groups.entries())
+    .map(([jobNumber, { parts, maxDays }]) => ({
+      jobNumber,
+      parts: parts.filter(Boolean),
+      maxDays,
+      statusPriority: jobStatusMap.get(normalize(jobNumber)) ?? '',
+    }))
+    .sort((a, b) => b.maxDays - a.maxDays);
 }
 
 // --- Logic Builders ---
@@ -615,7 +716,12 @@ function getSaCounts(rows: DashboardRow[]) {
 // --- Main Page Component ---
 
 export default function Page() {
-  const [data, setData] = useState<{ updatedAt?: string; rows?: DashboardRow[] }>({});
+  const [data, setData] = useState<{
+    updatedAt?: string;
+    rows?: DashboardRow[];
+    partsHeaders?: string[];
+    partsRows?: unknown[][];
+  }>({});
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [selectedMainId, setSelectedMainId] = useState<string | null>(null);
   const [selectedSa, setSelectedSa] = useState<string | null>(null);
@@ -660,6 +766,20 @@ export default function Page() {
 
   const rows = data.rows ?? [];
 
+  const partsData = useMemo((): PartsRow[] => {
+    const headers = data.partsHeaders;
+    const rawRows = data.partsRows;
+    if (!headers || !rawRows) return [];
+    return rawRows.map((row) => {
+      if (Array.isArray(row)) {
+        const obj: PartsRow = {};
+        headers.forEach((h, i) => { obj[h] = row[i] as string | number | null | undefined; });
+        return obj;
+      }
+      return row as PartsRow;
+    });
+  }, [data.partsHeaders, data.partsRows]);
+
   const jobSearchResults = useMemo(() => {
     const query = jobSearch.trim().toLowerCase();
     if (!query) return [];
@@ -671,13 +791,31 @@ export default function Page() {
   const alertCards = useMemo(() => buildAlertCards(rows), [rows]);
   const mainCards = useMemo(() => buildMainCards(rows), [rows]);
 
-  const grouped: Record<'Operations' | 'Parts' | 'Conventional', AlertCard[]> = useMemo(() => ({
+  const mustReturnGroups = useMemo(() => buildMustReturnGroups(partsData, rows), [partsData, rows]);
+
+  const inventoryAlertCards = useMemo((): AlertCard[] => [
+    {
+      id: 'must-return',
+      title: 'Must Return',
+      count: mustReturnGroups.length,
+      rows: [],
+      description: 'Parts received ≥25 days — not checked out or returned',
+      info: 'Flags parts that have been received for 25 or more days without being checked out or returned. Groups multiple parts under the same job number.',
+      section: 'Inventory',
+      detailType: 'must-return',
+    },
+  ], [mustReturnGroups]);
+
+  const allAlertCards = useMemo(() => [...alertCards, ...inventoryAlertCards], [alertCards, inventoryAlertCards]);
+
+  const grouped = useMemo(() => ({
     Operations: alertCards.filter((a) => a.section === 'Operations'),
     Parts: alertCards.filter((a) => a.section === 'Parts'),
     Conventional: alertCards.filter((a) => a.section === 'Conventional'),
-  }), [alertCards]);
+    Inventory: inventoryAlertCards,
+  }), [alertCards, inventoryAlertCards]);
 
-  const selectedAlert = alertCards.find((a) => a.id === selectedAlertId) ?? null;
+  const selectedAlert = allAlertCards.find((a) => a.id === selectedAlertId) ?? null;
   const selectedMain = mainCards.find((m) => m.id === selectedMainId) ?? null;
   const saCounts = useMemo(() => getSaCounts(rows), [rows]);
   const maxSaCount = saCounts.length > 0 ? Math.max(...saCounts.map((x) => x.count)) : 1;
@@ -829,11 +967,11 @@ export default function Page() {
         </section>
 
         {/* Alert Sections */}
-        {Object.entries(grouped).map(([section, items]) => (
+        {(['Operations', 'Parts', 'Conventional'] as const).map((section) => (
           <section key={section} className="space-y-4">
             <h2 className="text-2xl font-semibold">{section}</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-              {items.map((alert) => (
+              {grouped[section].map((alert) => (
                 <div key={alert.id} className={`rounded-xl border p-3 shadow-sm min-h-[108px] ${alertColorClasses(alert.id, alert.count)} ${selectedAlertId === alert.id ? 'ring-2 ring-slate-900' : ''}`}>
                   <div className="flex items-start justify-between gap-2">
                     <button type="button" onClick={() => setSelectedAlertId(alert.id)} className="min-w-0 flex-1 text-left">
@@ -849,6 +987,30 @@ export default function Page() {
                 </div>
               ))}
             </div>
+
+            {/* Inventory Control subsection — shown inside Parts */}
+            {section === 'Parts' && (
+              <div className="space-y-3 pt-2">
+                <h3 className="text-lg font-semibold text-slate-600">Inventory Control</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {grouped.Inventory.map((alert) => (
+                    <div key={alert.id} className={`rounded-xl border p-3 shadow-sm min-h-[108px] ${alertColorClasses(alert.id, alert.count)} ${selectedAlertId === alert.id ? 'ring-2 ring-slate-900' : ''}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <button type="button" onClick={() => setSelectedAlertId(alert.id)} className="min-w-0 flex-1 text-left">
+                          <p className="text-xs font-semibold text-slate-700 leading-tight">{alert.title}</p>
+                          <p className="mt-2 text-2xl font-bold text-slate-900">{alert.count}</p>
+                        </button>
+                        <button onClick={() => setInfoAlertId(infoAlertId === alert.id ? null : alert.id)} className="h-5 w-5 rounded-full border border-slate-400 bg-white text-xs font-semibold flex items-center justify-center">i</button>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-700 leading-tight">{alert.description}</p>
+                      {infoAlertId === alert.id && (
+                        <div className="mt-3 rounded-lg border border-slate-300 bg-white p-2 text-[11px] leading-snug text-slate-700">{alert.info}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         ))}
 
@@ -915,6 +1077,42 @@ export default function Page() {
                 </div>
               )}
             </>
+          ) : selectedAlert.detailType === 'must-return' ? (
+            <>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <h3 className="text-xl font-semibold">{selectedAlert.title}</h3>
+                  <p className="mt-1 text-slate-600">{mustReturnGroups.length} job(s) with parts to return</p>
+                </div>
+                <button onClick={() => setSelectedAlertId(null)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Clear</button>
+              </div>
+              {mustReturnGroups.length === 0 ? (
+                <p className="mt-6 text-slate-600">No parts pending return at this time.</p>
+              ) : (
+                <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-300">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b border-slate-300">
+                        <th className="p-3 text-left font-semibold">Job Number</th>
+                        <th className="p-3 text-left font-semibold">Days Past Received</th>
+                        <th className="p-3 text-left font-semibold">Part(s)</th>
+                        <th className="p-3 text-left font-semibold">Status + Priority</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mustReturnGroups.map((group, i) => (
+                        <tr key={`must-return-${i}`} className="border-b border-slate-200 align-top bg-white">
+                          <td className="p-3 font-semibold text-blue-700">{group.jobNumber}</td>
+                          <td className="p-3 font-bold text-red-600">{group.maxDays}</td>
+                          <td className="p-3">{group.parts.join(', ')}</td>
+                          <td className="p-3">{group.statusPriority}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
           ) : (
             <>
               <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -939,27 +1137,56 @@ export default function Page() {
                       <th className="p-3 text-left font-semibold">Model</th>
                       <th className="p-3 text-left font-semibold">Status + Priority</th>
                       <th className="p-3 text-left font-semibold">Status Days</th>
-                      <th className="p-3 text-left font-semibold">Task Titles</th>
-                      <th className="p-3 text-left font-semibold">Body ECD</th>
+                      {selectedAlert.id === 'general-parts' ? (
+                        <th className="p-3 text-left font-semibold">Parts</th>
+                      ) : (
+                        <>
+                          <th className="p-3 text-left font-semibold">Task Titles</th>
+                          <th className="p-3 text-left font-semibold">Body ECD</th>
+                        </>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {selectedAlert.rows.map((r, i) => {
                       const delayed = isRowDelayed(r);
+                      const jobNum = toText(r['Job Number']);
+                      const partsInfo = selectedAlert.id === 'general-parts'
+                        ? getPartsInfoForJob(jobNum, partsData)
+                        : null;
                       return (
-                        <tr 
-                          key={`${selectedAlert.id}-row-${i}`} 
+                        <tr
+                          key={`${selectedAlert.id}-row-${i}`}
                           className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}
                         >
-                          <td className="p-3 font-medium">{toText(r['Job Number'])}</td>
+                          <td className="p-3 font-medium">{jobNum}</td>
                           <td className="p-3 font-semibold">{toText(r['Priority'])}</td>
                           <td className="p-3">{toText(r['Model'])}</td>
                           <td className="p-3">{toText(r['Status + Priority'])}</td>
                           <td className={`p-3 ${delayed ? 'font-bold text-red-600' : ''}`}>
                             {toText(r['Status Days'])}
                           </td>
-                          <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
-                          <td className="p-3">{toText(r['Body ECD'])}</td>
+                          {partsInfo ? (
+                            <td className="p-3 max-w-md">
+                              {partsInfo.arrived.length > 0 && (
+                                <span><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</span>
+                              )}
+                              {partsInfo.arrived.length > 0 && partsInfo.missing.length > 0 && (
+                                <span className="mx-1">·</span>
+                              )}
+                              {partsInfo.missing.length > 0 && (
+                                <span><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</span>
+                              )}
+                              {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && (
+                                <span className="text-slate-400 italic">No parts data</span>
+                              )}
+                            </td>
+                          ) : (
+                            <>
+                              <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
+                              <td className="p-3">{toText(r['Body ECD'])}</td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
