@@ -159,6 +159,13 @@ function parseDateValue(value: unknown): Date | null {
     if (serialDate) return serialDate;
   }
 
+  // Handle "YYYY-MM-DD HH:MM:SS" (space separator) explicitly before generic parse
+  const spaceMatch = raw.match(/^(\d{4}-\d{2}-\d{2})\s\d{2}:\d{2}:\d{2}/);
+  if (spaceMatch) {
+    const parsed = new Date(`${spaceMatch[1]}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
   const direct = new Date(raw);
   if (!Number.isNaN(direct.getTime())) {
     direct.setHours(0, 0, 0, 0);
@@ -354,12 +361,17 @@ function getPartsInfoForJob(
   const jobParts = partsData.filter(
     (p) => normalize(getPartJobNumber(p)) === normalize(jobNumber)
   );
+  const receivedAtKeys = ['Received At', 'received at', 'received_at'];
+  const orderedAtKeys  = ['Ordered At', 'ordered at', 'ordered_at'];
   const arrived = jobParts
-    .filter((p) => getReceivedAt(p) !== null)
+    .filter((p) => !isBlank(getColumnValue(p, receivedAtKeys)))
     .map((p) => getPartName(p))
     .filter(Boolean);
   const missing = jobParts
-    .filter((p) => getOrderedAt(p) !== null && getReceivedAt(p) === null)
+    .filter((p) =>
+      !isBlank(getColumnValue(p, orderedAtKeys)) &&
+      isBlank(getColumnValue(p, receivedAtKeys))
+    )
     .map((p) => getPartName(p))
     .filter(Boolean);
   return { arrived, missing };
