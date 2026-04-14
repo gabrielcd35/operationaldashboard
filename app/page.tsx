@@ -931,17 +931,11 @@ export default function Page() {
             <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600 select-none">Parts debug info</summary>
             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] font-mono text-slate-700 space-y-1">
               <p>API response top-level keys: <strong>{Object.keys(data).join(', ') || '(none yet)'}</strong></p>
-              <p>data.partsRows type: <strong>{Array.isArray(data.partsRows) ? `array(${data.partsRows.length})` : String(typeof data.partsRows)}</strong></p>
-              <p>data.partsHeaders type: <strong>{Array.isArray(data.partsHeaders) ? `array(${data.partsHeaders.length})` : String(typeof data.partsHeaders)}</strong></p>
-              <p>partsData rows: <strong>{partsData.length}</strong></p>
-              {partsData.length > 0 && (
-                <>
-                  <p>Sample part keys: <strong>{Object.keys(partsData[0]).join(', ')}</strong></p>
-                  <p>Sample part[0] Job: <strong>{String(partsData[0]['Job'] ?? partsData[0]['job'] ?? partsData[0]['Job Number'] ?? '(none)')}</strong> | Part: <strong>{String(partsData[0]['Part'] ?? partsData[0]['part'] ?? '(none)')}</strong> | Received At: <strong>{String(partsData[0]['Received At'] ?? partsData[0]['received at'] ?? '(none)')}</strong></p>
-                </>
-              )}
-              {Array.isArray(data.partsRows) && data.partsRows.length > 0 && (
-                <p>Raw partsRows[0]: <strong>{JSON.stringify(data.partsRows[0]).slice(0, 200)}</strong></p>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <p>headers value: <strong>{JSON.stringify((data as any).headers)?.slice(0, 300) ?? '(none)'}</strong></p>
+              <p>rows count: <strong>{rows.length}</strong></p>
+              {rows.length > 0 && (
+                <p>rows[0] keys: <strong>{Object.keys(rows[0]).join(', ')}</strong></p>
               )}
               {rows.length > 0 && (
                 <p>Sample dashboard row Job Number: <strong>{String(rows[0]['Job Number'] ?? '(none)')}</strong></p>
