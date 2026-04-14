@@ -926,6 +926,22 @@ export default function Page() {
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
           <p className="mt-2 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
+          {/* TEMP DEBUG */}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600 select-none">Parts debug info</summary>
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] font-mono text-slate-700 space-y-1">
+              <p>API keys: <strong>{Object.keys(data).join(', ') || '(loading...)'}</strong></p>
+              <p>partsRows: <strong>{Array.isArray(data.partsRows) ? `array(${data.partsRows.length})` : String(typeof data.partsRows)}</strong></p>
+              <p>partsHeaders: <strong>{Array.isArray(data.partsHeaders) ? `[${(data.partsHeaders as string[]).join(', ')}]` : String(typeof data.partsHeaders)}</strong></p>
+              <p>partsData length: <strong>{partsData.length}</strong></p>
+              {Array.isArray(data.partsRows) && data.partsRows.length > 0 && (
+                <p>partsRows[0]: <strong>{JSON.stringify(data.partsRows[0]).slice(0, 300)}</strong></p>
+              )}
+              {partsData.length > 0 && rows.length > 0 && (
+                <p>Job match test — dashboard[0]: <strong>&quot;{String(rows[0]['Job Number'])}&quot;</strong> vs parts[0] job: <strong>&quot;{String((partsData[0] as Record<string,unknown>)['Job'] ?? (partsData[0] as Record<string,unknown>)['Job Number'] ?? '(none)')}&quot;</strong></p>
+              )}
+            </div>
+          </details>
         </section>
 
         {/* Main Stat Cards */}
