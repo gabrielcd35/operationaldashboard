@@ -926,22 +926,6 @@ export default function Page() {
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
           <p className="mt-2 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
-          {/* TEMP DEBUG — remove after confirming parts data */}
-          <details className="mt-3">
-            <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600 select-none">Parts debug info</summary>
-            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] font-mono text-slate-700 space-y-1">
-              <p>API response top-level keys: <strong>{Object.keys(data).join(', ') || '(none yet)'}</strong></p>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              <p>headers value: <strong>{JSON.stringify((data as any).headers)?.slice(0, 300) ?? '(none)'}</strong></p>
-              <p>rows count: <strong>{rows.length}</strong></p>
-              {rows.length > 0 && (
-                <p>rows[0] keys: <strong>{Object.keys(rows[0]).join(', ')}</strong></p>
-              )}
-              {rows.length > 0 && (
-                <p>Sample dashboard row Job Number: <strong>{String(rows[0]['Job Number'] ?? '(none)')}</strong></p>
-              )}
-            </div>
-          </details>
         </section>
 
         {/* Main Stat Cards */}
@@ -1165,23 +1149,14 @@ export default function Page() {
                       <th className="p-3 text-left font-semibold">Model</th>
                       <th className="p-3 text-left font-semibold">Status + Priority</th>
                       <th className="p-3 text-left font-semibold">Status Days</th>
-                      {selectedAlert.id === 'general-parts' ? (
-                        <th className="p-3 text-left font-semibold">Parts</th>
-                      ) : (
-                        <>
-                          <th className="p-3 text-left font-semibold">Task Titles</th>
-                          <th className="p-3 text-left font-semibold">Body ECD</th>
-                        </>
-                      )}
+                      <th className="p-3 text-left font-semibold">Task Titles</th>
+                      <th className="p-3 text-left font-semibold">Body ECD</th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedAlert.rows.map((r, i) => {
                       const delayed = isRowDelayed(r);
                       const jobNum = toText(r['Job Number']);
-                      const partsInfo = selectedAlert.id === 'general-parts'
-                        ? getPartsInfoForJob(jobNum, partsData)
-                        : null;
                       return (
                         <tr
                           key={`${selectedAlert.id}-row-${i}`}
@@ -1194,27 +1169,8 @@ export default function Page() {
                           <td className={`p-3 ${delayed ? 'font-bold text-red-600' : ''}`}>
                             {toText(r['Status Days'])}
                           </td>
-                          {partsInfo ? (
-                            <td className="p-3 max-w-md">
-                              {partsInfo.arrived.length > 0 && (
-                                <span><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</span>
-                              )}
-                              {partsInfo.arrived.length > 0 && partsInfo.missing.length > 0 && (
-                                <span className="mx-1">·</span>
-                              )}
-                              {partsInfo.missing.length > 0 && (
-                                <span><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</span>
-                              )}
-                              {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && (
-                                <span className="text-slate-400 italic">No parts data</span>
-                              )}
-                            </td>
-                          ) : (
-                            <>
-                              <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
-                              <td className="p-3">{toText(r['Body ECD'])}</td>
-                            </>
-                          )}
+                          <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
+                          <td className="p-3">{toText(r['Body ECD'])}</td>
                         </tr>
                       );
                     })}
