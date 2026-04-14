@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 // --- Types ---
 
@@ -621,11 +621,24 @@ export default function Page() {
   const [selectedSa, setSelectedSa] = useState<string | null>(null);
   const [infoAlertId, setInfoAlertId] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState('');
+  const [jobSearch, setJobSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/dashboard')
       .then((r) => r.json())
       .then(setData);
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const formattedLastPulled = useMemo(() => {
@@ -646,6 +659,15 @@ export default function Page() {
   }, [data.updatedAt]);
 
   const rows = data.rows ?? [];
+
+  const jobSearchResults = useMemo(() => {
+    const query = jobSearch.trim().toLowerCase();
+    if (!query) return [];
+    return rows
+      .filter((r) => normalize(r['Job Number']).includes(query))
+      .slice(0, 10);
+  }, [rows, jobSearch]);
+
   const alertCards = useMemo(() => buildAlertCards(rows), [rows]);
   const mainCards = useMemo(() => buildMainCards(rows), [rows]);
 
@@ -758,7 +780,37 @@ export default function Page() {
 
         {/* Main Stat Cards */}
         <section className="space-y-4">
-          <h2 className="text-2xl font-semibold">Main Information</h2>
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-2xl font-semibold">Main Information</h2>
+            <div ref={searchRef} className="relative w-64">
+              <input
+                type="text"
+                placeholder="Search job number…"
+                value={jobSearch}
+                onChange={(e) => { setJobSearch(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              {searchOpen && jobSearchResults.length > 0 && (
+                <ul className="absolute right-0 z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+                  {jobSearchResults.map((r, i) => (
+                    <li
+                      key={i}
+                      className="flex flex-col gap-0.5 px-4 py-2.5 text-sm hover:bg-slate-50 cursor-default border-b border-slate-100 last:border-0"
+                    >
+                      <span className="font-semibold text-slate-900">{toText(r['Job Number'])}</span>
+                      <span className="text-xs text-slate-500">{toText(r['Status + Priority'])}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {searchOpen && jobSearch.trim() !== '' && jobSearchResults.length === 0 && (
+                <div className="absolute right-0 z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 shadow-lg">
+                  No matching jobs found.
+                </div>
+              )}
+            </div>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-4">
             {mainCards.map((card) => (
               <button
