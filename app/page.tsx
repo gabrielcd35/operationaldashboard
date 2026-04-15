@@ -951,6 +951,7 @@ export default function Page() {
             <div ref={searchRef} className="relative w-64">
               <input
                 type="text"
+                inputMode="numeric"
                 placeholder="Search job number…"
                 value={jobSearch}
                 onChange={(e) => { setJobSearch(e.target.value); setSearchOpen(true); }}
