@@ -377,6 +377,22 @@ function getPartsInfoForJob(
   return { arrived, missing };
 }
 
+function getGlassPartsForJob(
+  jobNumber: string,
+  partsData: PartsRow[]
+): { name: string; arrived: boolean }[] {
+  const glassTerms = ['quarter glass', 'windshield'];
+  const jobParts = partsData.filter(
+    (p) => normalize(getPartJobNumber(p)) === normalize(jobNumber)
+  );
+  return jobParts
+    .filter((p) => glassTerms.some((term) => normalize(getPartName(p)).includes(term)))
+    .map((p) => ({
+      name: getPartName(p),
+      arrived: !isBlank(getColumnValue(p, ['Received At', 'received at', 'received_at'])),
+    }));
+}
+
 function buildMustReturnGroups(
   partsData: PartsRow[],
   rows: DashboardRow[]
@@ -1157,6 +1173,11 @@ export default function Page() {
                       <th className="p-3 text-left font-semibold">Status Days</th>
                       {selectedAlert.id === 'general-parts' ? (
                         <th className="p-3 text-left font-semibold">Parts</th>
+                      ) : selectedAlert.id === 'glass-install-after-delivery' ? (
+                        <>
+                          <th className="p-3 text-left font-semibold">Task Titles</th>
+                          <th className="p-3 text-left font-semibold">Glass Parts</th>
+                        </>
                       ) : (
                         <>
                           <th className="p-3 text-left font-semibold">Task Titles</th>
@@ -1171,6 +1192,9 @@ export default function Page() {
                       const jobNum = toText(r['Job Number']);
                       const partsInfo = selectedAlert.id === 'general-parts'
                         ? getPartsInfoForJob(jobNum, partsData)
+                        : null;
+                      const glassParts = selectedAlert.id === 'glass-install-after-delivery'
+                        ? getGlassPartsForJob(jobNum, partsData)
                         : null;
                       return (
                         <tr
@@ -1199,6 +1223,29 @@ export default function Page() {
                                 <span className="text-slate-400 italic">No parts data</span>
                               )}
                             </td>
+                          ) : glassParts ? (
+                            <>
+                              <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
+                              <td className="p-3 max-w-xs">
+                                {glassParts.length === 0 ? (
+                                  <span className="text-slate-400 italic">None found</span>
+                                ) : (
+                                  <ul className="space-y-0.5">
+                                    {glassParts.map((gp, gi) => (
+                                      <li key={gi} className="flex items-center gap-1.5 text-xs">
+                                        <span className={gp.arrived ? 'text-green-600 font-bold' : 'text-orange-500 font-bold'}>
+                                          {gp.arrived ? '✓' : '⏳'}
+                                        </span>
+                                        <span>{gp.name}</span>
+                                        <span className={`text-[10px] font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
+                                          {gp.arrived ? 'Arrived' : 'Pending'}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </td>
+                            </>
                           ) : (
                             <>
                               <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
