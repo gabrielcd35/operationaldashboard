@@ -742,6 +742,10 @@ export default function Page() {
   const [jobSearch, setJobSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const [showBonus, setShowBonus] = useState(false);
+  const [bonusUnlocked, setBonusUnlocked] = useState(false);
+  const [bonusInput, setBonusInput] = useState('');
+  const [bonusError, setBonusError] = useState(false);
 
   useEffect(() => {
     fetch('/api/dashboard')
@@ -1236,7 +1240,18 @@ export default function Page() {
                 <h3 className="text-2xl font-bold">{selectedMain.title}</h3>
                 <p className="mt-1 text-slate-600">{selectedMain.count} total matching job(s)</p>
               </div>
-              <button onClick={() => { setSelectedMainId(null); setSelectedSa(null); }} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Close</button>
+              <div className="flex items-center gap-2">
+                {selectedMain.modalType === 'delivered-hail' && (
+                  <button
+                    onClick={() => { setShowBonus((v) => !v); setBonusError(false); setBonusInput(''); }}
+                    className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium flex items-center gap-1.5"
+                  >
+                    <span>{bonusUnlocked ? '💰' : '🔒'}</span>
+                    <span>Bonus</span>
+                  </button>
+                )}
+                <button onClick={() => { setSelectedMainId(null); setSelectedSa(null); setBonusUnlocked(false); setShowBonus(false); setBonusInput(''); setBonusError(false); }} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Close</button>
+              </div>
             </div>
 
             {/* Modal Content - Repair Approved Buckets */}
@@ -1334,6 +1349,63 @@ export default function Page() {
               </div>
             ) : selectedMain.modalType === 'delivered-hail' ? (
               <div className="mt-8 space-y-6">
+
+                {/* Bonus Panel */}
+                {showBonus && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    {!bonusUnlocked ? (
+                      <div className="flex flex-col gap-3">
+                        <p className="text-sm font-semibold text-slate-700">Enter password to view bonus</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="password"
+                            value={bonusInput}
+                            onChange={(e) => { setBonusInput(e.target.value); setBonusError(false); }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (bonusInput === 'Gf080417') { setBonusUnlocked(true); setBonusError(false); }
+                                else { setBonusError(true); setBonusInput(''); }
+                              }
+                            }}
+                            placeholder="Password"
+                            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-slate-400 w-44"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => {
+                              if (bonusInput === 'Gf080417') { setBonusUnlocked(true); setBonusError(false); }
+                              else { setBonusError(true); setBonusInput(''); }
+                            }}
+                            className="rounded-xl bg-slate-800 text-white px-4 py-2 text-sm font-medium"
+                          >
+                            Unlock
+                          </button>
+                        </div>
+                        {bonusError && <p className="text-xs text-red-600 font-medium">Incorrect password.</p>}
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-4">
+                        <p className="text-sm font-bold text-slate-700 mr-2">💰 Bonus Breakdown</p>
+                        <div className="flex gap-3 flex-wrap">
+                          <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-center">
+                            <p className="text-[10px] uppercase font-bold text-green-700 tracking-wider">Approval Bonus</p>
+                            <p className="text-lg font-bold text-green-800">${deliveredHailStats.approvalBonusTotal}</p>
+                          </div>
+                          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-center">
+                            <p className="text-[10px] uppercase font-bold text-blue-700 tracking-wider">Repair Bonus</p>
+                            <p className="text-lg font-bold text-blue-800">${deliveredHailStats.repairBonusTotal}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-center">
+                            <p className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Total</p>
+                            <p className="text-lg font-bold text-slate-900">${deliveredHailStats.combinedBonusTotal}</p>
+                          </div>
+                        </div>
+                        <button onClick={() => { setBonusUnlocked(false); setBonusInput(''); setShowBonus(false); }} className="ml-auto text-xs text-slate-400 hover:text-slate-600">🔒 Lock</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
                   {[
                     { label: 'Units', val: deliveredHailStats.deliveredCount },
