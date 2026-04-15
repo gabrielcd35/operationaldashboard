@@ -398,6 +398,7 @@ function buildMustReturnGroups(
   const groups = new Map<string, { parts: string[]; maxDays: number }>();
   for (const part of qualifying) {
     const jn = getPartJobNumber(part);
+    if (normalize(jn) === '000') continue;
     if (!jn) continue;
     const received = getReceivedAt(part)!;
     const days = daysSince(received);
