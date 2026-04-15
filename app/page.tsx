@@ -1410,11 +1410,9 @@ export default function Page() {
                   {[
                     { label: 'Units', val: deliveredHailStats.deliveredCount },
                     { label: 'Avg Appr', val: formatDays(deliveredHailStats.avgApprovalTime) },
-                    { label: 'Appr Bonus', val: `$${deliveredHailStats.approvalBonusTotal}` },
                     { label: 'Avg PDR/2', val: formatDays(deliveredHailStats.avgApprovedPendingPdr) },
                     { label: 'Avg Repair', val: formatDays(deliveredHailStats.avgRepairTime) },
                     { label: 'Avg Deliv', val: formatDays(deliveredHailStats.avgDeliveryTime) },
-                    { label: 'Repair Bonus', val: `$${deliveredHailStats.repairBonusTotal}` },
                   ].map((stat, i) => (
                     <div key={i} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">{stat.label}</p>
