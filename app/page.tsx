@@ -1426,7 +1426,8 @@ export default function Page() {
                 </div>
               </div>
               {copyMessage && <p className="mt-3 text-sm text-slate-600">{copyMessage}</p>}
-              <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-300">
+              {/* Desktop table */}
+              <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-300 hidden md:block">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr className="border-b border-slate-300">
@@ -1521,6 +1522,75 @@ export default function Page() {
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile card list */}
+              <div className="mt-6 space-y-3 md:hidden">
+                {selectedAlert.rows.map((r, i) => {
+                  const delayed = isRowDelayed(r);
+                  const jobNum = toText(r['Job Number']);
+                  const partsInfo = selectedAlert.id === 'general-parts'
+                    ? getPartsInfoForJob(jobNum, partsData)
+                    : null;
+                  const glassParts = selectedAlert.id === 'glass-install-after-delivery'
+                    ? getGlassPartsForJob(jobNum, partsData)
+                    : null;
+                  return (
+                    <div key={`m-${selectedAlert.id}-${i}`} className={`rounded-2xl border p-4 text-sm ${delayed ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300'}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-lg font-bold text-blue-700">{jobNum}</span>
+                        <span className="text-xs font-bold uppercase tracking-wide">P: {toText(r['Priority'])}</span>
+                      </div>
+                      <p className="mt-1 text-slate-700">{toText(r['Model'])}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5">{toText(r['Status + Priority'])}</span>
+                        <span className={delayed ? 'font-bold text-red-600' : 'font-medium text-slate-700'}>Days: {toText(r['Status Days'])}</span>
+                      </div>
+                      {partsInfo ? (
+                        <div className="mt-2 text-xs text-slate-700">
+                          {partsInfo.arrived.length > 0 && (
+                            <p><span className="font-semibold">Arrived:</span> {partsInfo.arrived.join(', ')}</p>
+                          )}
+                          {partsInfo.missing.length > 0 && (
+                            <p><span className="font-semibold">Missing:</span> {partsInfo.missing.join(', ')}</p>
+                          )}
+                          {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && (
+                            <p className="italic text-slate-400">No parts data</p>
+                          )}
+                        </div>
+                      ) : glassParts ? (
+                        <div className="mt-2 text-xs text-slate-700 space-y-1">
+                          <p><span className="font-semibold">Task Titles:</span> {toText(r['Task Titles']) || <span className="italic text-slate-400">—</span>}</p>
+                          <div>
+                            <p className="font-semibold">Glass Parts:</p>
+                            {glassParts.length === 0 ? (
+                              <p className="italic text-slate-400">None found</p>
+                            ) : (
+                              <ul className="space-y-0.5 mt-1">
+                                {glassParts.map((gp, gi) => (
+                                  <li key={gi} className="flex items-center gap-1.5">
+                                    <span className={gp.arrived ? 'text-green-600 font-bold' : 'text-orange-500 font-bold'}>
+                                      {gp.arrived ? '✓' : '⏳'}
+                                    </span>
+                                    <span>{gp.name}</span>
+                                    <span className={`text-[10px] font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
+                                      {gp.arrived ? 'Arrived' : 'Pending'}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-xs text-slate-700 space-y-1">
+                          <p><span className="font-semibold">Task Titles:</span> {toText(r['Task Titles']) || <span className="italic text-slate-400">—</span>}</p>
+                          <p><span className="font-semibold">Body ECD:</span> {toText(r['Body ECD']) || <span className="italic text-slate-400">—</span>}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -1748,41 +1818,73 @@ export default function Page() {
                 </div>
               </div>
             ) : (
-              <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-300">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-slate-50">
-                    <tr className="border-b border-slate-300">
-                      <th className="p-3 font-semibold">Job Number</th>
-                      <th className="p-3 font-semibold">Priority</th>
-                      <th className="p-3 font-semibold">Model</th>
-                      <th className="p-3 font-semibold">Status + Priority</th>
-                      <th className="p-3 font-semibold">Status Days</th>
-                      <th className="p-3 font-semibold">SA</th>
-                      {selectedMain.id === 'post-repair-main' && <th className="p-3 font-semibold">Task Titles</th>}
-                      {selectedMain.id === 'conventional-hail-main' && <th className="p-3 font-semibold">Body ECD</th>}
-                      {selectedMain.id === 'ready-to-deliver-main' && <th className="p-3 font-semibold">date_end</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedMain.rows.map((r, i) => {
-                      const delayed = isRowDelayed(r);
-                      return (
-                        <tr key={i} className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}>
-                          <td className="p-3 font-bold text-blue-700">{toText(r['Job Number'])}</td>
-                          <td className="p-3 font-bold">{toText(r['Priority'])}</td>
-                          <td className="p-3">{toText(r['Model'])}</td>
-                          <td className="p-3">{toText(r['Status + Priority'])}</td>
-                          <td className={`p-3 ${delayed ? 'font-bold text-red-600' : 'font-medium'}`}>{toText(r['Status Days'])}</td>
-                          <td className="p-3">{toText(r['SA'])}</td>
-                          {selectedMain.id === 'post-repair-main' && <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>}
-                          {selectedMain.id === 'conventional-hail-main' && <td className="p-3">{toText(r['Body ECD'])}</td>}
-                          {selectedMain.id === 'ready-to-deliver-main' && <td className="p-3">{toText(getDateEndValue(r))}</td>}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {/* Desktop table */}
+                <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-300 hidden md:block">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b border-slate-300">
+                        <th className="p-3 font-semibold">Job Number</th>
+                        <th className="p-3 font-semibold">Priority</th>
+                        <th className="p-3 font-semibold">Model</th>
+                        <th className="p-3 font-semibold">Status + Priority</th>
+                        <th className="p-3 font-semibold">Status Days</th>
+                        <th className="p-3 font-semibold">SA</th>
+                        {selectedMain.id === 'post-repair-main' && <th className="p-3 font-semibold">Task Titles</th>}
+                        {selectedMain.id === 'conventional-hail-main' && <th className="p-3 font-semibold">Body ECD</th>}
+                        {selectedMain.id === 'ready-to-deliver-main' && <th className="p-3 font-semibold">date_end</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedMain.rows.map((r, i) => {
+                        const delayed = isRowDelayed(r);
+                        return (
+                          <tr key={i} className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}>
+                            <td className="p-3 font-bold text-blue-700">{toText(r['Job Number'])}</td>
+                            <td className="p-3 font-bold">{toText(r['Priority'])}</td>
+                            <td className="p-3">{toText(r['Model'])}</td>
+                            <td className="p-3">{toText(r['Status + Priority'])}</td>
+                            <td className={`p-3 ${delayed ? 'font-bold text-red-600' : 'font-medium'}`}>{toText(r['Status Days'])}</td>
+                            <td className="p-3">{toText(r['SA'])}</td>
+                            {selectedMain.id === 'post-repair-main' && <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>}
+                            {selectedMain.id === 'conventional-hail-main' && <td className="p-3">{toText(r['Body ECD'])}</td>}
+                            {selectedMain.id === 'ready-to-deliver-main' && <td className="p-3">{toText(getDateEndValue(r))}</td>}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile card list */}
+                <div className="mt-6 space-y-3 md:hidden">
+                  {selectedMain.rows.map((r, i) => {
+                    const delayed = isRowDelayed(r);
+                    return (
+                      <div key={i} className={`rounded-2xl border p-4 text-sm ${delayed ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300'}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-lg font-bold text-blue-700">{toText(r['Job Number'])}</span>
+                          <span className="text-xs font-bold uppercase tracking-wide">P: {toText(r['Priority'])}</span>
+                        </div>
+                        <p className="mt-1 text-slate-700">{toText(r['Model'])}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5">{toText(r['Status + Priority'])}</span>
+                          <span className={delayed ? 'font-bold text-red-600' : 'font-medium text-slate-700'}>Days: {toText(r['Status Days'])}</span>
+                          <span className="text-slate-600">SA: {toText(r['SA'])}</span>
+                        </div>
+                        {selectedMain.id === 'post-repair-main' && (
+                          <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Task Titles:</span> {toText(r['Task Titles']) || <span className="italic text-slate-400">—</span>}</p>
+                        )}
+                        {selectedMain.id === 'conventional-hail-main' && (
+                          <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Body ECD:</span> {toText(r['Body ECD']) || <span className="italic text-slate-400">—</span>}</p>
+                        )}
+                        {selectedMain.id === 'ready-to-deliver-main' && (
+                          <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">date_end:</span> {toText(getDateEndValue(r)) || <span className="italic text-slate-400">—</span>}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
