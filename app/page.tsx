@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // --- Types ---
 
@@ -742,6 +742,98 @@ function getSaCounts(rows: DashboardRow[]) {
     .slice(0, 5);
 }
 
+// --- Flip Clock Components ---
+
+function FlipDigit({ value }: { value: string }) {
+  const [display, setDisplay] = useState(value);
+  const [pending, setPending] = useState<string | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'top' | 'bottom'>('idle');
+  const displayRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== displayRef.current) {
+      setPending(value);
+      setPhase('top');
+    }
+  }, [value]);
+
+  const handleTopEnd = useCallback(() => {
+    if (pending !== null) {
+      displayRef.current = pending;
+      setDisplay(pending);
+      setPhase('bottom');
+    }
+  }, [pending]);
+
+  const handleBottomEnd = useCallback(() => {
+    setPending(null);
+    setPhase('idle');
+  }, []);
+
+  const W = 24, H = 36;
+
+  const topBase: React.CSSProperties = {
+    position: 'absolute', top: 0, left: 0, right: 0, height: H / 2,
+    background: '#252528', borderRadius: '3px 3px 0 0',
+    overflow: 'hidden', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+  };
+  const botBase: React.CSSProperties = {
+    position: 'absolute', bottom: 0, left: 0, right: 0, height: H / 2,
+    background: '#1a1a1e', borderRadius: '0 0 3px 3px',
+    overflow: 'hidden', display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+  };
+  const numStyle: React.CSSProperties = {
+    fontFamily: '"Courier New", Courier, monospace',
+    fontSize: 26, fontWeight: 'bold', color: '#f0ece0', userSelect: 'none' as const, lineHeight: 1,
+  };
+
+  return (
+    <div style={{ position: 'relative', width: W, height: H, display: 'inline-block', borderRadius: 3, boxShadow: '0 2px 6px rgba(0,0,0,0.6)' }}>
+      {/* Static top — shows pending (revealed as flip card folds away) or current */}
+      <div style={topBase}>
+        <span style={{ ...numStyle, marginBottom: -2 }}>{phase === 'idle' ? display : (pending ?? display)}</span>
+      </div>
+      {/* Static bottom — shows pending during bottom phase, otherwise display */}
+      <div style={botBase}>
+        <span style={{ ...numStyle, marginTop: -2 }}>{phase === 'bottom' ? (pending ?? display) : display}</span>
+      </div>
+      {/* Center divider */}
+      <div style={{ position: 'absolute', top: H / 2 - 0.5, left: 0, right: 0, height: 1, background: '#000', zIndex: 5 }} />
+      {/* Flip top card — old value folding down */}
+      {phase === 'top' && (
+        <div className="flip-top-out" onAnimationEnd={handleTopEnd}
+          style={{ ...topBase, transformOrigin: 'bottom center', zIndex: 10 }}>
+          <span style={{ ...numStyle, marginBottom: -2 }}>{display}</span>
+        </div>
+      )}
+      {/* Flip bottom card — new value unfolding */}
+      {phase === 'bottom' && (
+        <div className="flip-bottom-in" onAnimationEnd={handleBottomEnd}
+          style={{ ...botBase, transformOrigin: 'top center', zIndex: 10 }}>
+          <span style={{ ...numStyle, marginTop: -2 }}>{pending ?? display}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FlipClock({ seconds }: { seconds: number }) {
+  const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const ss = String(seconds % 60).padStart(2, '0');
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+      <FlipDigit value={mm[0]} />
+      <FlipDigit value={mm[1]} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 2 }}>
+        <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#c0392b' }} />
+        <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#c0392b' }} />
+      </div>
+      <FlipDigit value={ss[0]} />
+      <FlipDigit value={ss[1]} />
+    </div>
+  );
+}
+
 // --- Main Page Component ---
 
 export default function Page() {
@@ -764,11 +856,30 @@ export default function Page() {
   const [bonusInput, setBonusInput] = useState('');
   const [bonusError, setBonusError] = useState(false);
 
-  useEffect(() => {
+  const [countdown, setCountdown] = useState(300);
+
+  const fetchData = useCallback(() => {
     fetch('/api/dashboard')
       .then((r) => r.json())
       .then(setData);
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          fetchData();
+          return 300;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [fetchData]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -946,7 +1057,11 @@ export default function Page() {
         {/* Header */}
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
-          <p className="mt-2 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
+          <div className="mt-3 flex items-center gap-3">
+            <FlipClock seconds={countdown} />
+            <p className="text-xs text-slate-400">next refresh</p>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
         </section>
 
         {/* Main Stat Cards */}
