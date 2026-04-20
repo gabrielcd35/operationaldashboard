@@ -744,6 +744,8 @@ function getSaCounts(rows: DashboardRow[]) {
 
 // --- Flip Clock Components ---
 
+const FLIP_W = 14, FLIP_H = 22, FLIP_FONT = 16;
+
 function FlipDigit({ value }: { value: string }) {
   const [display, setDisplay] = useState(value);
   const [pending, setPending] = useState<string | null>(null);
@@ -770,47 +772,69 @@ function FlipDigit({ value }: { value: string }) {
     setPhase('idle');
   }, []);
 
-  const W = 24, H = 36;
+  // Uses wrapper trick: centers digit in full FLIP_H space, clips to half
+  function HalfPanel({ digit, half, extra }: { digit: string; half: 'top' | 'bottom'; extra?: React.CSSProperties }) {
+    const isTop = half === 'top';
+    return (
+      <div style={{
+        position: 'absolute',
+        top: isTop ? 0 : FLIP_H / 2,
+        left: 0, right: 0,
+        height: FLIP_H / 2,
+        overflow: 'hidden',
+        background: isTop ? '#ffffff' : '#f2f2f2',
+        borderRadius: isTop ? '2px 2px 0 0' : '0 0 2px 2px',
+        border: '1px solid #222',
+        borderTop: isTop ? '1px solid #222' : 'none',
+        borderBottom: isTop ? 'none' : '1px solid #222',
+        ...extra,
+      }}>
+        <div style={{
+          height: FLIP_H,
+          marginTop: isTop ? 0 : -(FLIP_H / 2),
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{
+            fontFamily: '"Courier New", Courier, monospace',
+            fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111',
+            userSelect: 'none', lineHeight: 1,
+          }}>{digit}</span>
+        </div>
+      </div>
+    );
+  }
 
-  const topBase: React.CSSProperties = {
-    position: 'absolute', top: 0, left: 0, right: 0, height: H / 2,
-    background: '#252528', borderRadius: '3px 3px 0 0',
-    overflow: 'hidden', display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-  };
-  const botBase: React.CSSProperties = {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: H / 2,
-    background: '#1a1a1e', borderRadius: '0 0 3px 3px',
-    overflow: 'hidden', display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-  };
-  const numStyle: React.CSSProperties = {
-    fontFamily: '"Courier New", Courier, monospace',
-    fontSize: 26, fontWeight: 'bold', color: '#f0ece0', userSelect: 'none' as const, lineHeight: 1,
-  };
+  const shown  = phase === 'idle' ? display : (pending ?? display);
+  const bottom = phase === 'bottom' ? (pending ?? display) : display;
 
   return (
-    <div style={{ position: 'relative', width: W, height: H, display: 'inline-block', borderRadius: 3, boxShadow: '0 2px 6px rgba(0,0,0,0.6)' }}>
-      {/* Static top — shows pending (revealed as flip card folds away) or current */}
-      <div style={topBase}>
-        <span style={{ ...numStyle, marginBottom: -2 }}>{phase === 'idle' ? display : (pending ?? display)}</span>
-      </div>
-      {/* Static bottom — shows pending during bottom phase, otherwise display */}
-      <div style={botBase}>
-        <span style={{ ...numStyle, marginTop: -2 }}>{phase === 'bottom' ? (pending ?? display) : display}</span>
-      </div>
+    <div style={{ position: 'relative', width: FLIP_W, height: FLIP_H, display: 'inline-block' }}>
+      <HalfPanel digit={shown}   half="top" />
+      <HalfPanel digit={bottom}  half="bottom" />
       {/* Center divider */}
-      <div style={{ position: 'absolute', top: H / 2 - 0.5, left: 0, right: 0, height: 1, background: '#000', zIndex: 5 }} />
-      {/* Flip top card — old value folding down */}
+      <div style={{ position: 'absolute', top: FLIP_H / 2 - 0.5, left: 0, right: 0, height: 1, background: '#444', zIndex: 5 }} />
+      {/* Flip top — old digit folding away */}
+      {phase === 'top' && (
+        <HalfPanel digit={display} half="top"
+          extra={{ transformOrigin: 'bottom center', zIndex: 10 } as React.CSSProperties}
+        />
+      )}
+      {/* We can't put className on HalfPanel directly, so wrap */}
       {phase === 'top' && (
         <div className="flip-top-out" onAnimationEnd={handleTopEnd}
-          style={{ ...topBase, transformOrigin: 'bottom center', zIndex: 10 }}>
-          <span style={{ ...numStyle, marginBottom: -2 }}>{display}</span>
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: FLIP_H / 2, transformOrigin: 'bottom center', zIndex: 20, overflow: 'hidden', background: '#ffffff', borderRadius: '2px 2px 0 0', border: '1px solid #222', borderBottom: 'none' }}>
+          <div style={{ height: FLIP_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontFamily: '"Courier New", Courier, monospace', fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111', userSelect: 'none', lineHeight: 1 }}>{display}</span>
+          </div>
         </div>
       )}
-      {/* Flip bottom card — new value unfolding */}
+      {/* Flip bottom — new digit unfolding */}
       {phase === 'bottom' && (
         <div className="flip-bottom-in" onAnimationEnd={handleBottomEnd}
-          style={{ ...botBase, transformOrigin: 'top center', zIndex: 10 }}>
-          <span style={{ ...numStyle, marginTop: -2 }}>{pending ?? display}</span>
+          style={{ position: 'absolute', top: FLIP_H / 2, left: 0, right: 0, height: FLIP_H / 2, transformOrigin: 'top center', zIndex: 20, overflow: 'hidden', background: '#f2f2f2', borderRadius: '0 0 2px 2px', border: '1px solid #222', borderTop: 'none' }}>
+          <div style={{ height: FLIP_H, marginTop: -(FLIP_H / 2), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontFamily: '"Courier New", Courier, monospace', fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111', userSelect: 'none', lineHeight: 1 }}>{pending ?? display}</span>
+          </div>
         </div>
       )}
     </div>
@@ -821,12 +845,12 @@ function FlipClock({ seconds }: { seconds: number }) {
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
   const ss = String(seconds % 60).padStart(2, '0');
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
       <FlipDigit value={mm[0]} />
       <FlipDigit value={mm[1]} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 2 }}>
-        <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#c0392b' }} />
-        <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#c0392b' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, margin: '0 1px' }}>
+        <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#333' }} />
+        <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#333' }} />
       </div>
       <FlipDigit value={ss[0]} />
       <FlipDigit value={ss[1]} />
@@ -857,6 +881,9 @@ export default function Page() {
   const [bonusError, setBonusError] = useState(false);
 
   const [countdown, setCountdown] = useState(300);
+  const [easterEggActive, setEasterEggActive] = useState(false);
+  const [easterEggInput, setEasterEggInput] = useState('');
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(() => {
     fetch('/api/dashboard')
@@ -869,17 +896,18 @@ export default function Page() {
   }, [fetchData]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
       setCountdown((c) => {
-        if (c <= 1) {
-          fetchData();
-          return 300;
-        }
+        if (c <= 1) { fetchData(); return 300; }
         return c - 1;
       });
     }, 1000);
-    return () => clearInterval(timer);
-  }, [fetchData]);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -1057,9 +1085,36 @@ export default function Page() {
         {/* Header */}
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
-          <div className="mt-3 flex items-center gap-3">
+          <div className="mt-2 flex items-center gap-2">
             <FlipClock seconds={countdown} />
-            <p className="text-xs text-slate-400">next refresh</p>
+            {easterEggActive ? (
+              <input
+                type="text"
+                autoFocus
+                value={easterEggInput}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setEasterEggInput(v);
+                  if (v === '4815162342') {
+                    fetchData();
+                    setCountdown(300);
+                    setEasterEggActive(false);
+                    setEasterEggInput('');
+                  }
+                }}
+                onBlur={() => { setEasterEggActive(false); setEasterEggInput(''); }}
+                onKeyDown={(e) => { if (e.key === 'Escape') { setEasterEggActive(false); setEasterEggInput(''); } }}
+                className="w-28 rounded border border-slate-300 px-2 py-0.5 text-xs outline-none focus:ring-1 focus:ring-slate-400"
+                placeholder="_ _ _ _ _ _ _ _ _ _"
+              />
+            ) : (
+              <button
+                onClick={() => setEasterEggActive(true)}
+                className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                next refresh
+              </button>
+            )}
           </div>
           <p className="mt-1 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
         </section>
