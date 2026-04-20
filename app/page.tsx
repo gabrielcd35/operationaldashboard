@@ -998,6 +998,11 @@ export default function Page() {
 
   const mustReturnGroups = useMemo(() => buildMustReturnGroups(partsData, rows), [partsData, rows]);
 
+  const wipCount = useMemo(() => rows.filter((r) =>
+    isVehicleOnSite(r) || isInsuranceApproval(r) || isRepairApproved(r) ||
+    isPdrInProgress(r) || isConventionalHail(r) || isPostRepair(r) || isReadyToDeliver(r)
+  ).length, [rows]);
+
   const inventoryAlertCards = useMemo((): AlertCard[] => [
     {
       id: 'must-return',
@@ -1256,6 +1261,9 @@ export default function Page() {
               >
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-700 leading-tight">{card.title}</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{card.count}</p>
+                {card.id === 'total-jobs' && (
+                  <p className="mt-1 text-[10px] text-slate-400">WIP: {wipCount}</p>
+                )}
               </button>
             ))}
           </div>
