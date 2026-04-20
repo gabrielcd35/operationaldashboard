@@ -858,6 +858,38 @@ function FlipClock({ seconds }: { seconds: number }) {
   );
 }
 
+// --- Holidays ---
+
+const DMG_HOLIDAYS_2026 = [
+  { name: 'New Year\'s Day',    date: new Date('2026-01-01T00:00:00'), note: '' },
+  { name: 'Spring Holiday',     date: new Date('2026-03-06T00:00:00'), note: '*' },
+  { name: 'Memorial Day',       date: new Date('2026-05-25T00:00:00'), note: '' },
+  { name: 'Juneteenth',         date: new Date('2026-06-19T00:00:00'), note: '*' },
+  { name: 'Independence Day',   date: new Date('2026-07-04T00:00:00'), note: '' },
+  { name: 'Labor Day',          date: new Date('2026-09-07T00:00:00'), note: '' },
+  { name: 'Thanksgiving',       date: new Date('2026-11-26T00:00:00'), note: '' },
+  { name: 'Christmas Day',      date: new Date('2026-12-25T00:00:00'), note: '' },
+  { name: 'New Year\'s Day',    date: new Date('2027-01-01T00:00:00'), note: '' },
+];
+
+function formatHolidayDate(d: Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long', month: 'numeric', day: 'numeric', year: '2-digit',
+  }).format(d);
+}
+
+function getUpcomingHoliday(): { name: string; note: string; weeksAway: number; daysAway: number } | null {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (const h of DMG_HOLIDAYS_2026) {
+    const diff = Math.ceil((h.date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff >= 0) {
+      return { name: h.name, note: h.note, daysAway: diff, weeksAway: Math.floor(diff / 7) };
+    }
+  }
+  return null;
+}
+
 // --- Main Page Component ---
 
 export default function Page() {
@@ -875,6 +907,7 @@ export default function Page() {
   const [jobSearch, setJobSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const [holidaysOpen, setHolidaysOpen] = useState(false);
   const [showBonus, setShowBonus] = useState(false);
   const [bonusUnlocked, setBonusUnlocked] = useState(false);
   const [bonusInput, setBonusInput] = useState('');
@@ -1084,7 +1117,9 @@ export default function Page() {
         
         {/* Header */}
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
-          <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
+          </div>
           <div className="mt-2 flex items-center gap-2">
             <FlipClock seconds={countdown} />
             {easterEggActive ? (
@@ -1117,6 +1152,50 @@ export default function Page() {
             )}
           </div>
           <p className="mt-1 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
+
+          {/* Holidays panel — bottom right */}
+          <div className="mt-3 flex justify-end">
+            <div className="text-right">
+              {/* Collapsed summary */}
+              {!holidaysOpen && (() => {
+                const upcoming = getUpcomingHoliday();
+                return (
+                  <button
+                    onClick={() => setHolidaysOpen(true)}
+                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {upcoming
+                      ? <>🗓 <span className="font-medium">{upcoming.name}{upcoming.note}</span> in {upcoming.daysAway === 0 ? 'today!' : upcoming.weeksAway < 1 ? `${upcoming.daysAway}d` : `${upcoming.weeksAway}w`}</>
+                      : '🗓 No upcoming holidays'}
+                  </button>
+                );
+              })()}
+
+              {/* Expanded holiday list */}
+              {holidaysOpen && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left min-w-[260px]">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">DMG Observed Holidays 2026</p>
+                    <button onClick={() => setHolidaysOpen(false)} className="text-slate-400 hover:text-slate-600 text-xs ml-3">✕</button>
+                  </div>
+                  <ul className="space-y-1">
+                    {DMG_HOLIDAYS_2026.map((h, i) => {
+                      const today = new Date(); today.setHours(0,0,0,0);
+                      const isPast = h.date < today;
+                      const isToday = h.date.getTime() === today.getTime();
+                      return (
+                        <li key={i} className={`flex items-baseline justify-between gap-4 text-xs ${isPast ? 'text-slate-300 line-through' : isToday ? 'text-green-600 font-bold' : 'text-slate-700'}`}>
+                          <span>{h.name}{h.note && <span className="text-slate-400">{h.note}</span>}</span>
+                          <span className="tabular-nums text-right whitespace-nowrap">{formatHolidayDate(h.date)}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-2 text-[10px] text-slate-400">*Subject to change with Ice Closures / Business Need</p>
+                </div>
+              )}
+            </div>
+          </div>
         </section>
 
         {/* Main Stat Cards */}
