@@ -907,6 +907,7 @@ export default function Page() {
   const [jobSearch, setJobSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const alertDetailsRef = useRef<HTMLElement>(null);
   const [holidaysOpen, setHolidaysOpen] = useState(false);
   const [showBonus, setShowBonus] = useState(false);
   const [bonusUnlocked, setBonusUnlocked] = useState(false);
@@ -992,6 +993,12 @@ export default function Page() {
       .filter((r) => normalize(r['Job Number']).includes(query))
       .slice(0, 10);
   }, [rows, jobSearch]);
+
+  useEffect(() => {
+    if (selectedAlertId && alertDetailsRef.current) {
+      alertDetailsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedAlertId]);
 
   const alertCards = useMemo(() => buildAlertCards(rows), [rows]);
   const mainCards = useMemo(() => buildMainCards(rows), [rows]);
@@ -1318,7 +1325,7 @@ export default function Page() {
         ))}
 
         {/* Selected Alert Details Table */}
-        <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
+        <section ref={alertDetailsRef} className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           {!selectedAlert ? (
             <>
               <h3 className="text-xl font-semibold">Alert Details</h3>
