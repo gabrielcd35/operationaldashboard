@@ -1155,7 +1155,7 @@ export default function Page() {
 
           {/* Holidays panel — bottom right */}
           <div className="mt-3 flex justify-end">
-            <div className="text-right">
+            <div className="relative text-right">
               {/* Collapsed summary */}
               {!holidaysOpen && (() => {
                 const upcoming = getUpcomingHoliday();
@@ -1173,7 +1173,7 @@ export default function Page() {
 
               {/* Expanded holiday list */}
               {holidaysOpen && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left min-w-[260px]">
+                <div className="absolute right-0 top-6 z-50 rounded-xl border border-slate-200 bg-white shadow-lg p-3 text-left min-w-[260px]">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">DMG Observed Holidays 2026</p>
                     <button onClick={() => setHolidaysOpen(false)} className="text-slate-400 hover:text-slate-600 text-xs ml-3">✕</button>
