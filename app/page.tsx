@@ -1152,6 +1152,18 @@ export default function Page() {
             )}
           </div>
           <p className="mt-1 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600 select-none">Parts debug info</summary>
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] font-mono text-slate-700 space-y-1">
+              <p>API keys: <strong>{Object.keys(data).join(', ') || '(loading...)'}</strong></p>
+              <p>partsRows: <strong>{Array.isArray(data.partsRows) ? `array(${data.partsRows.length})` : String(typeof data.partsRows)}</strong></p>
+              <p>partsHeaders: <strong>{Array.isArray(data.partsHeaders) ? `[${(data.partsHeaders as string[]).join(', ')}]` : String(typeof data.partsHeaders)}</strong></p>
+              <p>partsData length: <strong>{partsData.length}</strong></p>
+              {Array.isArray(data.partsRows) && data.partsRows.length > 0 && (
+                <p>partsRows[0]: <strong>{JSON.stringify(data.partsRows[0]).slice(0, 300)}</strong></p>
+              )}
+            </div>
+          </details>
 
           {/* Holidays panel — bottom right */}
           <div className="mt-3 flex justify-end">
