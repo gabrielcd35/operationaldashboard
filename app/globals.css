@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Flip clock split-flap animations */
+@keyframes flip-top-out {
+  from { transform: perspective(200px) rotateX(0deg); }
+  to   { transform: perspective(200px) rotateX(-90deg); }
+}
+@keyframes flip-bottom-in {
+  from { transform: perspective(200px) rotateX(90deg); }
+  to   { transform: perspective(200px) rotateX(0deg); }
+}
+.flip-top-out {
+  animation: flip-top-out 0.18s ease-in forwards;
+}
+.flip-bottom-in {
+  animation: flip-bottom-in 0.18s ease-out forwards;
+}
