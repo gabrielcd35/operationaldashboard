@@ -1151,7 +1151,7 @@ export default function Page() {
               </button>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
+          <p className="mt-1 text-sm text-slate-600">Last pulled: {formattedLastPulled} · parts: {Array.isArray(data.partsRows) ? data.partsRows.length : 'none'}</p>
 
           {/* Holidays panel — bottom right */}
           <div className="mt-3 flex justify-end">
