@@ -1164,18 +1164,6 @@ export default function Page() {
             )}
           </div>
           <p className="mt-1 text-sm text-slate-600">Last pulled: {formattedLastPulled}</p>
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600 select-none">Parts debug info</summary>
-            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] font-mono text-slate-700 space-y-1">
-              <p>API keys: <strong>{Object.keys(data).join(', ') || '(loading...)'}</strong></p>
-              <p>partsRows: <strong>{Array.isArray(data.partsRows) ? `array(${data.partsRows.length})` : String(typeof data.partsRows)}</strong></p>
-              <p>partsHeaders: <strong>{Array.isArray(data.partsHeaders) ? `[${(data.partsHeaders as string[]).join(', ')}]` : String(typeof data.partsHeaders)}</strong></p>
-              <p>partsData length: <strong>{partsData.length}</strong></p>
-              {Array.isArray(data.partsRows) && data.partsRows.length > 0 && (
-                <p>partsRows[0]: <strong>{JSON.stringify(data.partsRows[0]).slice(0, 300)}</strong></p>
-              )}
-            </div>
-          </details>
 
           {/* Holidays panel — bottom right */}
           <div className="mt-3 flex justify-end">
@@ -1770,19 +1758,25 @@ export default function Page() {
                       <th className="p-3 font-semibold">Status + Priority</th>
                       <th className="p-3 font-semibold">Status Days</th>
                       <th className="p-3 font-semibold">SA</th>
+                      {selectedMain.id === 'post-repair-main' && <th className="p-3 font-semibold">Task Titles</th>}
+                      {selectedMain.id === 'conventional-hail-main' && <th className="p-3 font-semibold">Body ECD</th>}
+                      {selectedMain.id === 'ready-to-deliver-main' && <th className="p-3 font-semibold">date_end</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {selectedMain.rows.map((r, i) => {
                       const delayed = isRowDelayed(r);
                       return (
-                        <tr key={i} className={`border-b border-slate-200 ${delayed ? 'bg-red-50' : 'bg-white'}`}>
+                        <tr key={i} className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}>
                           <td className="p-3 font-bold text-blue-700">{toText(r['Job Number'])}</td>
                           <td className="p-3 font-bold">{toText(r['Priority'])}</td>
                           <td className="p-3">{toText(r['Model'])}</td>
                           <td className="p-3">{toText(r['Status + Priority'])}</td>
                           <td className={`p-3 ${delayed ? 'font-bold text-red-600' : 'font-medium'}`}>{toText(r['Status Days'])}</td>
                           <td className="p-3">{toText(r['SA'])}</td>
+                          {selectedMain.id === 'post-repair-main' && <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>}
+                          {selectedMain.id === 'conventional-hail-main' && <td className="p-3">{toText(r['Body ECD'])}</td>}
+                          {selectedMain.id === 'ready-to-deliver-main' && <td className="p-3">{toText(getDateEndValue(r))}</td>}
                         </tr>
                       );
                     })}
