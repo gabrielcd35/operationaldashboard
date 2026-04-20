@@ -446,6 +446,7 @@ function matchesPartsStage(row: DashboardRow): boolean {
     status === 'post repair' ||
     status === 'pdr in-progress' ||
     status === 'e - ehi repair' ||
+    status === 'conventional (hail)' ||
     (status.includes('repair approved') && days >= 3)
   );
 }
@@ -587,7 +588,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
       count: generalParts.length,
       rows: sortByPriority(generalParts),
       description: 'General parts tasks still active',
-      info: 'This alert appears when Order Parts or Parts Received still exists in Task Titles while the job is in Post Repair, PDR In-Progress, E - EHI Repair, or Repair Approved with 3 or more status days.',
+      info: 'This alert appears when Order Parts or Parts Received still exists in Task Titles while the job is in Post Repair, PDR In-Progress, E - EHI Repair, Conventional (Hail), or Repair Approved with 3 or more status days.',
       section: 'Parts',
     },
     {
@@ -596,7 +597,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
       count: glassParts.length,
       rows: sortByPriority(glassParts),
       description: 'Glass tasks still active',
-      info: 'This alert appears when Glass Order, Order Windshield, or Glass Received still exists in Task Titles while the job is in Post Repair, PDR In-Progress, E - EHI Repair, or Repair Approved with 3 or more status days.',
+      info: 'This alert appears when Glass Order, Order Windshield, or Glass Received still exists in Task Titles while the job is in Post Repair, PDR In-Progress, E - EHI Repair, Conventional (Hail), or Repair Approved with 3 or more status days.',
       section: 'Parts',
     },
     {
@@ -1344,7 +1345,21 @@ export default function Page() {
                         <h4 className="text-lg font-semibold">{bucket.sa}</h4>
                         <p className="mt-1 text-sm text-slate-600">{bucket.items.length} flagged job(s)</p>
                       </div>
-                      <div className="overflow-x-auto">
+                      {/* Mobile card view */}
+                      <div className="sm:hidden divide-y divide-slate-200">
+                        {bucket.items.map((item, index) => (
+                          <div key={`${bucket.sa}-monthly-qc-m-${index}`} className="p-3 bg-white space-y-1 text-sm">
+                            <p className="font-semibold text-blue-700">{toText(item.row['Job Number'])}</p>
+                            {toText(getDateStartValue(item.row)) && <p><span className="font-semibold text-slate-500">Start:</span> {toText(getDateStartValue(item.row))}</p>}
+                            {toText(getRepairApprovedDateValue(item.row)) && <p><span className="font-semibold text-slate-500">Repair Approved:</span> {toText(getRepairApprovedDateValue(item.row))}</p>}
+                            {toText(getDateEndValue(item.row)) && <p><span className="font-semibold text-slate-500">End:</span> {toText(getDateEndValue(item.row))}</p>}
+                            {toText(getQcNotCompletedValue(item.row)) && <p><span className="font-semibold text-slate-500">QC:</span> {toText(getQcNotCompletedValue(item.row))}</p>}
+                            {item.issues.length > 0 && <p className="italic text-slate-700">{item.issues.join(', ')}</p>}
+                          </div>
+                        ))}
+                      </div>
+                      {/* Desktop table view */}
+                      <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead className="bg-white">
                             <tr className="border-b border-slate-300">
@@ -1387,8 +1402,20 @@ export default function Page() {
               {mustReturnGroups.length === 0 ? (
                 <p className="mt-6 text-slate-600">No parts pending return at this time.</p>
               ) : (
-                <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-300">
-                  <table className="w-full text-sm">
+                <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
+                  {/* Mobile card view */}
+                  <div className="sm:hidden divide-y divide-slate-200">
+                    {mustReturnGroups.map((group, i) => (
+                      <div key={`must-return-m-${i}`} className="p-3 bg-white space-y-1 text-sm">
+                        <p className="font-semibold text-blue-700">{group.jobNumber}</p>
+                        <p><span className="font-semibold text-slate-500">Days:</span> <span className="font-bold text-red-600">{group.maxDays}</span></p>
+                        <p><span className="font-semibold text-slate-500">Part(s):</span> {group.parts.join(', ')}</p>
+                        <p><span className="font-semibold text-slate-500">Status:</span> {group.statusPriority}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table view */}
+                  <table className="hidden sm:table w-full text-sm">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-300">
                         <th className="p-3 text-left font-semibold">Job Number</th>
@@ -1426,9 +1453,63 @@ export default function Page() {
                 </div>
               </div>
               {copyMessage && <p className="mt-3 text-sm text-slate-600">{copyMessage}</p>}
-              {/* Desktop table */}
-              <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-300 hidden md:block">
-                <table className="w-full text-sm">
+              <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
+                {/* Mobile card view */}
+                <div className="sm:hidden divide-y divide-slate-200">
+                  {selectedAlert.rows.map((r, i) => {
+                    const delayed = isRowDelayed(r);
+                    const jobNum = toText(r['Job Number']);
+                    const partsInfo = selectedAlert.id === 'general-parts'
+                      ? getPartsInfoForJob(jobNum, partsData)
+                      : null;
+                    const glassParts = selectedAlert.id === 'glass-install-after-delivery'
+                      ? getGlassPartsForJob(jobNum, partsData)
+                      : null;
+                    return (
+                      <div
+                        key={`${selectedAlert.id}-card-${i}`}
+                        className={`p-3 space-y-1 text-sm ${delayed ? 'bg-red-50' : 'bg-white'}`}
+                      >
+                        <p className="font-semibold text-blue-700">{jobNum}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                          <p><span className="font-semibold text-slate-500">Priority:</span> {toText(r['Priority'])}</p>
+                          <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
+                        </div>
+                        <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
+                        <p><span className="font-semibold text-slate-500">Days:</span> <span className={delayed ? 'font-bold text-red-600' : ''}>{toText(r['Status Days'])}</span></p>
+                        {partsInfo && (
+                          <div>
+                            {partsInfo.arrived.length > 0 && <p><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</p>}
+                            {partsInfo.missing.length > 0 && <p><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</p>}
+                            {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && <p className="text-slate-400 italic">No parts data</p>}
+                          </div>
+                        )}
+                        {glassParts && (
+                          <div>
+                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
+                            {glassParts.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-0.5">
+                                {glassParts.map((gp, gi) => (
+                                  <span key={gi} className={`text-xs font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
+                                    {gp.arrived ? '✓' : '⏳'} {gp.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!partsInfo && !glassParts && (
+                          <div>
+                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
+                            {toText(r['Body ECD']) && <p><span className="font-semibold text-slate-500">Body ECD:</span> {toText(r['Body ECD'])}</p>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Desktop table view */}
+                <table className="hidden sm:table w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr className="border-b border-slate-300">
                       <th className="p-3 text-left font-semibold">Job Number</th>
@@ -1633,8 +1714,30 @@ export default function Page() {
                       <h4 className="text-xl font-bold text-slate-800">{bucket.name} ({bucket.rows.length})</h4>
                       <button onClick={() => handleCopyRows(bucket.rows)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold flex items-center gap-2"><span>📋</span><span>Copy Bucket</span></button>
                     </div>
-                    <div className="overflow-x-auto rounded-2xl border border-slate-300">
-                      <table className="w-full text-sm text-left">
+                    <div className="rounded-2xl border border-slate-300 overflow-hidden">
+                      {/* Mobile card view */}
+                      <div className="sm:hidden divide-y divide-slate-200">
+                        {bucket.rows.map((r, i) => {
+                          const delayed = isRowDelayed(r);
+                          return (
+                            <div key={i} className={`p-3 space-y-1 text-sm ${delayed ? 'bg-red-50' : 'bg-white'}`}>
+                              <p className="font-bold text-blue-700">{toText(r['Job Number'])}</p>
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                                <p><span className="font-semibold text-slate-500">Priority:</span> <span className="font-bold">{toText(r['Priority'])}</span></p>
+                                <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
+                              </div>
+                              <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                                {toText(r['Severity']) && <p><span className="font-semibold text-slate-500">Severity:</span> {toText(r['Severity'])}</p>}
+                                {toText(r['Insurance']) && <p><span className="font-semibold text-slate-500">Insurance:</span> {toText(r['Insurance'])}</p>}
+                                <p><span className="font-semibold text-slate-500">Days:</span> <span className={delayed ? 'font-bold text-red-600' : 'font-medium'}>{toText(r['Status Days'])}</span></p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Desktop table view */}
+                      <table className="hidden sm:table w-full text-sm text-left">
                         <thead className="bg-slate-50">
                           <tr className="border-b border-slate-300">
                             <th className="p-3 font-semibold">Job Number</th>
@@ -1688,8 +1791,22 @@ export default function Page() {
                       <h4 className="text-lg font-semibold">{selectedSa}</h4>
                       <button onClick={() => handleCopyRows(selectedSaRows)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium flex items-center gap-2"><span>📋</span><span>Copy Jobs</span></button>
                     </div>
-                    <div className="overflow-x-auto rounded-2xl border border-slate-300">
-                      <table className="w-full text-sm">
+                    <div className="rounded-2xl border border-slate-300 overflow-hidden">
+                      {/* Mobile card view */}
+                      <div className="sm:hidden divide-y divide-slate-200">
+                        {selectedSaRows.map((r, i) => (
+                          <div key={`sa-card-${i}`} className="p-3 space-y-1 text-sm bg-white">
+                            <p className="font-medium text-blue-700">{toText(r['Job Number'])}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                              <p><span className="font-semibold text-slate-500">Priority:</span> <span className="font-semibold">{toText(r['Priority'])}</span></p>
+                              <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
+                            </div>
+                            <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Desktop table view */}
+                      <table className="hidden sm:table w-full text-sm">
                         <thead className="bg-slate-50">
                           <tr className="border-b border-slate-300">
                             <th className="p-3 text-left font-semibold">Job Number</th>
@@ -1786,8 +1903,25 @@ export default function Page() {
                     </div>
                   ))}
                 </div>
-                <div className="overflow-x-auto rounded-2xl border border-slate-300">
-                  <table className="w-full text-sm text-left">
+                <div className="rounded-2xl border border-slate-300 overflow-hidden">
+                  {/* Mobile card view */}
+                  <div className="sm:hidden divide-y divide-slate-200">
+                    {deliveredHailStats.deliveredRows.map((r, i) => (
+                      <div key={i} className="p-3 space-y-1 text-sm bg-white">
+                        <p className="font-medium">{toText(r['Job Number'])}</p>
+                        <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                          {toText(r['Approval Time']) && <p><span className="font-semibold text-slate-500">Appr:</span> {toText(r['Approval Time'])}</p>}
+                          <p><span className="font-semibold text-slate-500">PDR/2:</span> {toNumber(r['Approved Pending PDR']) / 2}</p>
+                          {toText(r['Repair Time']) && <p><span className="font-semibold text-slate-500">Repair:</span> {toText(r['Repair Time'])}</p>}
+                          {toText(r['Delivery Time']) && <p><span className="font-semibold text-slate-500">Deliv:</span> {toText(r['Delivery Time'])}</p>}
+                        </div>
+                        <p><span className="font-semibold text-blue-700">Appr to Deliv:</span> <span className="font-bold text-blue-700">{(toNumber(r['Approved Pending PDR']) / 2) + toNumber(r['Repair Time']) + toNumber(r['Delivery Time'])}</span></p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table view */}
+                  <table className="hidden sm:table w-full text-sm text-left">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-300">
                         <th className="p-3 font-semibold">Job Number</th>
@@ -1818,73 +1952,62 @@ export default function Page() {
                 </div>
               </div>
             ) : (
-              <>
-                {/* Desktop table */}
-                <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-300 hidden md:block">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50">
-                      <tr className="border-b border-slate-300">
-                        <th className="p-3 font-semibold">Job Number</th>
-                        <th className="p-3 font-semibold">Priority</th>
-                        <th className="p-3 font-semibold">Model</th>
-                        <th className="p-3 font-semibold">Status + Priority</th>
-                        <th className="p-3 font-semibold">Status Days</th>
-                        <th className="p-3 font-semibold">SA</th>
-                        {selectedMain.id === 'post-repair-main' && <th className="p-3 font-semibold">Task Titles</th>}
-                        {selectedMain.id === 'conventional-hail-main' && <th className="p-3 font-semibold">Body ECD</th>}
-                        {selectedMain.id === 'ready-to-deliver-main' && <th className="p-3 font-semibold">date_end</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedMain.rows.map((r, i) => {
-                        const delayed = isRowDelayed(r);
-                        return (
-                          <tr key={i} className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}>
-                            <td className="p-3 font-bold text-blue-700">{toText(r['Job Number'])}</td>
-                            <td className="p-3 font-bold">{toText(r['Priority'])}</td>
-                            <td className="p-3">{toText(r['Model'])}</td>
-                            <td className="p-3">{toText(r['Status + Priority'])}</td>
-                            <td className={`p-3 ${delayed ? 'font-bold text-red-600' : 'font-medium'}`}>{toText(r['Status Days'])}</td>
-                            <td className="p-3">{toText(r['SA'])}</td>
-                            {selectedMain.id === 'post-repair-main' && <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>}
-                            {selectedMain.id === 'conventional-hail-main' && <td className="p-3">{toText(r['Body ECD'])}</td>}
-                            {selectedMain.id === 'ready-to-deliver-main' && <td className="p-3">{toText(getDateEndValue(r))}</td>}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {/* Mobile card list */}
-                <div className="mt-6 space-y-3 md:hidden">
+              <div className="mt-8 rounded-2xl border border-slate-300 overflow-hidden">
+                {/* Mobile card view */}
+                <div className="sm:hidden divide-y divide-slate-200">
                   {selectedMain.rows.map((r, i) => {
                     const delayed = isRowDelayed(r);
                     return (
-                      <div key={i} className={`rounded-2xl border p-4 text-sm ${delayed ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300'}`}>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-lg font-bold text-blue-700">{toText(r['Job Number'])}</span>
-                          <span className="text-xs font-bold uppercase tracking-wide">P: {toText(r['Priority'])}</span>
+                      <div key={i} className={`p-3 space-y-1 text-sm ${delayed ? 'bg-red-50' : 'bg-white'}`}>
+                        <p className="font-bold text-blue-700">{toText(r['Job Number'])}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                          <p><span className="font-semibold text-slate-500">Priority:</span> <span className="font-bold">{toText(r['Priority'])}</span></p>
+                          <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
                         </div>
-                        <p className="mt-1 text-slate-700">{toText(r['Model'])}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5">{toText(r['Status + Priority'])}</span>
-                          <span className={delayed ? 'font-bold text-red-600' : 'font-medium text-slate-700'}>Days: {toText(r['Status Days'])}</span>
-                          <span className="text-slate-600">SA: {toText(r['SA'])}</span>
+                        <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                          <p><span className="font-semibold text-slate-500">Days:</span> <span className={delayed ? 'font-bold text-red-600' : 'font-medium'}>{toText(r['Status Days'])}</span></p>
+                          {toText(r['SA']) && <p><span className="font-semibold text-slate-500">SA:</span> {toText(r['SA'])}</p>}
                         </div>
-                        {selectedMain.id === 'post-repair-main' && (
-                          <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Task Titles:</span> {toText(r['Task Titles']) || <span className="italic text-slate-400">—</span>}</p>
-                        )}
-                        {selectedMain.id === 'conventional-hail-main' && (
-                          <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">Body ECD:</span> {toText(r['Body ECD']) || <span className="italic text-slate-400">—</span>}</p>
-                        )}
-                        {selectedMain.id === 'ready-to-deliver-main' && (
-                          <p className="mt-2 text-xs text-slate-700"><span className="font-semibold">date_end:</span> {toText(getDateEndValue(r)) || <span className="italic text-slate-400">—</span>}</p>
-                        )}
                       </div>
                     );
                   })}
                 </div>
-              </>
+                {/* Desktop table view */}
+                <table className="hidden sm:table w-full text-sm text-left">
+                  <thead className="bg-slate-50">
+                    <tr className="border-b border-slate-300">
+                      <th className="p-3 font-semibold">Job Number</th>
+                      <th className="p-3 font-semibold">Priority</th>
+                      <th className="p-3 font-semibold">Model</th>
+                      <th className="p-3 font-semibold">Status + Priority</th>
+                      <th className="p-3 font-semibold">Status Days</th>
+                      <th className="p-3 font-semibold">SA</th>
+                      {selectedMain.id === 'post-repair-main' && <th className="p-3 font-semibold">Task Titles</th>}
+                      {selectedMain.id === 'conventional-hail-main' && <th className="p-3 font-semibold">Body ECD</th>}
+                      {selectedMain.id === 'ready-to-deliver-main' && <th className="p-3 font-semibold">date_end</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedMain.rows.map((r, i) => {
+                      const delayed = isRowDelayed(r);
+                      return (
+                        <tr key={i} className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}>
+                          <td className="p-3 font-bold text-blue-700">{toText(r['Job Number'])}</td>
+                          <td className="p-3 font-bold">{toText(r['Priority'])}</td>
+                          <td className="p-3">{toText(r['Model'])}</td>
+                          <td className="p-3">{toText(r['Status + Priority'])}</td>
+                          <td className={`p-3 ${delayed ? 'font-bold text-red-600' : 'font-medium'}`}>{toText(r['Status Days'])}</td>
+                          <td className="p-3">{toText(r['SA'])}</td>
+                          {selectedMain.id === 'post-repair-main' && <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>}
+                          {selectedMain.id === 'conventional-hail-main' && <td className="p-3">{toText(r['Body ECD'])}</td>}
+                          {selectedMain.id === 'ready-to-deliver-main' && <td className="p-3">{toText(getDateEndValue(r))}</td>}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
