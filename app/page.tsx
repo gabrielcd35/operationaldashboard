@@ -15,7 +15,7 @@ type AlertCard = {
   description: string;
   info: string;
   section: 'Operations' | 'Parts' | 'Conventional' | 'Inventory';
-  detailType?: 'default' | 'sa-monthly-qc' | 'must-return' | 'missing-install';
+  detailType?: 'default' | 'sa-monthly-qc' | 'must-return' | 'missing-install' | 'we-have-parts';
 };
 
 type MustReturnGroup = {
@@ -359,6 +359,18 @@ function getReturnedAt(part: PartsRow): Date | null {
   return parseDateValue(getColumnValue(part, ['Returned At', 'returned at', 'returned_at']));
 }
 
+function getPartModel(part: PartsRow): string {
+  return toText(getColumnValue(part, ['Model', 'model']));
+}
+
+function getPartMake(part: PartsRow): string {
+  return toText(getColumnValue(part, ['Make', 'make']));
+}
+
+function getPartYear(part: PartsRow): string {
+  return toText(getColumnValue(part, ['Year', 'year']));
+}
+
 function daysSince(date: Date): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -456,6 +468,60 @@ function buildMissingInstallGroups(
   }
 
   return Array.from(groups.values()).sort((a, b) => b.items.length - a.items.length);
+}
+
+type WeHavePartsMatch = {
+  vehicleJobNumber: string;
+  statusPriority: string;
+  partName: string;
+  year: string;
+  make: string;
+  model: string;
+};
+
+function buildWeHavePartsMatches(
+  partsData: PartsRow[],
+  rows: DashboardRow[]
+): WeHavePartsMatch[] {
+  // Qualifying dashboard rows: Vehicle On-Site, Insurance Approval,
+  // Repair Approved (incl. PDR Approved variants), PDR In-Progress, Post Repair
+  const qualifying = rows.filter((r) =>
+    isVehicleOnSite(r) ||
+    isInsuranceApproval(r) ||
+    isRepairApproved(r) ||
+    isPdrInProgress(r) ||
+    isPostRepair(r)
+  );
+
+  // Stock parts (Job "000") that have a Model
+  const stockParts = partsData.filter((p) => {
+    const jn = normalize(getPartJobNumber(p));
+    if (jn !== '000') return false;
+    return !!normalize(getPartModel(p));
+  });
+
+  const matches: WeHavePartsMatch[] = [];
+  for (const r of qualifying) {
+    const vehicleModel = normalize(r['Model']);
+    if (!vehicleModel) continue;
+    for (const p of stockParts) {
+      const partModel = normalize(getPartModel(p));
+      if (partModel && partModel === vehicleModel) {
+        matches.push({
+          vehicleJobNumber: toText(r['Job Number']),
+          statusPriority: toText(r['Status + Priority']),
+          partName: getPartName(p),
+          year: getPartYear(p),
+          make: getPartMake(p),
+          model: getPartModel(p),
+        });
+      }
+    }
+  }
+
+  return matches.sort((a, b) =>
+    a.vehicleJobNumber.localeCompare(b.vehicleJobNumber, undefined, { numeric: true })
+  );
 }
 
 function buildMustReturnGroups(
@@ -1071,6 +1137,7 @@ export default function Page() {
 
   const mustReturnGroups = useMemo(() => buildMustReturnGroups(partsData, rows), [partsData, rows]);
   const missingInstallGroups = useMemo(() => buildMissingInstallGroups(partsData, rows), [partsData, rows]);
+  const weHavePartsMatches = useMemo(() => buildWeHavePartsMatches(partsData, rows), [partsData, rows]);
 
   const wipCount = useMemo(() => rows.filter((r) =>
     isVehicleOnSite(r) || isInsuranceApproval(r) || isRepairApproved(r) ||
@@ -1098,7 +1165,17 @@ export default function Page() {
       section: 'Inventory',
       detailType: 'missing-install',
     },
-  ], [mustReturnGroups, missingInstallGroups]);
+    {
+      id: 'we-have-parts',
+      title: 'We have parts!',
+      count: weHavePartsMatches.length,
+      rows: [],
+      description: 'Stock (Job 000) parts that match vehicles currently in the lot',
+      info: 'Scans Job 000 parts in the PARTS sheet (stock inventory) and matches their Model to any vehicle currently in Vehicle On-Site, Insurance Approval, Repair Approved, PDR Approved, PDR In-Progress, or Post Repair. The goal is to use up old stock before ordering new parts.',
+      section: 'Inventory',
+      detailType: 'we-have-parts',
+    },
+  ], [mustReturnGroups, missingInstallGroups, weHavePartsMatches]);
 
   const allAlertCards = useMemo(() => [...alertCards, ...inventoryAlertCards], [alertCards, inventoryAlertCards]);
 
@@ -1578,6 +1655,58 @@ export default function Page() {
                               ))}
                             </ul>
                           </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : selectedAlert.detailType === 'we-have-parts' ? (
+            <>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <h3 className="text-xl font-semibold">{selectedAlert.title}</h3>
+                  <p className="mt-1 text-slate-600">{weHavePartsMatches.length} match(es) with stock inventory</p>
+                </div>
+                <button onClick={() => setSelectedAlertId(null)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Clear</button>
+              </div>
+              {weHavePartsMatches.length === 0 ? (
+                <p className="mt-6 text-slate-600">No stock parts currently match any vehicle in the lot.</p>
+              ) : (
+                <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
+                  {/* Mobile card view */}
+                  <div className="md:hidden divide-y divide-slate-200">
+                    {weHavePartsMatches.map((m, i) => (
+                      <div key={`wh-m-${i}`} className="p-3 bg-white space-y-1 text-sm">
+                        <p className="font-semibold text-blue-700">{m.vehicleJobNumber}</p>
+                        <p><span className="font-semibold text-slate-500">Status:</span> {m.statusPriority}</p>
+                        <p><span className="font-semibold text-slate-500">Part:</span> <span className="font-semibold">{m.partName}</span></p>
+                        <p><span className="font-semibold text-slate-500">Fits:</span> {[m.year, m.make, m.model].filter(Boolean).join(' ')}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table view */}
+                  <table className="hidden md:table w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b border-slate-300">
+                        <th className="p-3 text-left font-semibold">Job Number</th>
+                        <th className="p-3 text-left font-semibold">Status + Priority</th>
+                        <th className="p-3 text-left font-semibold">Part Name</th>
+                        <th className="p-3 text-left font-semibold">Year</th>
+                        <th className="p-3 text-left font-semibold">Make</th>
+                        <th className="p-3 text-left font-semibold">Model</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weHavePartsMatches.map((m, i) => (
+                        <tr key={`wh-${i}`} className="border-b border-slate-200 align-top bg-white">
+                          <td className="p-3 font-semibold text-blue-700">{m.vehicleJobNumber}</td>
+                          <td className="p-3">{m.statusPriority}</td>
+                          <td className="p-3 font-semibold">{m.partName}</td>
+                          <td className="p-3">{m.year}</td>
+                          <td className="p-3">{m.make}</td>
+                          <td className="p-3">{m.model}</td>
                         </tr>
                       ))}
                     </tbody>
