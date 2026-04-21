@@ -478,6 +478,94 @@ function buildMissingInstallGroups(
   return Array.from(groups.values()).sort((a, b) => b.items.length - a.items.length);
 }
 
+// Allow-list of Set Key UUIDs for parts currently sitting in stock.
+// Update this list as inventory changes.
+const STOCK_SET_KEYS = new Set<string>([
+  '4d94cc5e-af46-44bb-b6c6-f80c17c65777',
+  '00dfaae0-714f-4408-856c-375c1a782ea1',
+  '8b751350-ede0-405c-b871-5994d8e3a7db',
+  '75b7927a-27d1-4e02-972a-f33b98fef4a7',
+  '693e8794-0323-431f-8926-37958aac0adf',
+  '0d7b422a-6927-4a51-9c82-6f8963bc6969',
+  'bb394ea7-9ac4-4f58-8904-e0ec9beeeb32',
+  'f9675657-8530-430a-b2b0-3b541dfd8472',
+  'f7f4ecf2-0a57-4b67-8858-e936c1a23e9d',
+  '997943d5-b7db-499c-989b-a5463cb91a89',
+  'c9101d06-1ef1-428f-9b4c-50546567fd60',
+  '725d20ce-e247-4486-a85f-afd23e35fa69',
+  '30e16e81-1c67-4966-a6bc-6214142b0cf8',
+  'fd072635-1c03-416e-b512-a0a4ff48a1c6',
+  '8424d2b5-5ef0-48be-9c15-801aa1336c28',
+  '43490abc-1a91-4291-9eeb-a6a24c91790b',
+  '997d3df5-6538-46f4-b930-768cd38956a2',
+  '8b8e850a-cf15-48c4-8fc2-2931ea92124b',
+  'ba3adc5b-79e2-4e1a-bd1e-454126f05d30',
+  'b3379819-4b66-4050-8661-6905fb3297f3',
+  'eaaf5b0d-f430-4fd6-ae17-68c688ff9dbd',
+  'ee8418d0-414c-432c-a53d-8b06f8a81833',
+  'd7bb5ee3-df60-4130-8914-20088b49aa61',
+  'be5560e7-32bd-49aa-8600-13e79987ec4e',
+  '2fefa46d-7d73-4d58-b2b0-df64317bdab1',
+  '0bf6b628-9e8c-4bca-a9c0-db65f13ecde1',
+  '4e00855f-5dcc-49d8-914c-aaeac1bd96e6',
+  '4ce23c76-4bbb-4a4c-9660-c72d5611b02c',
+  '309ed7c6-e1d7-4dee-946d-518b4f66116d',
+  '65f0d676-908d-4c5a-befe-67a858f06847',
+  '0ac56ed2-cb12-43f6-940c-9b1d43f2618e',
+  'dd11958c-2492-4a27-a33e-ee28a8ca7738',
+  'e86a604f-e6d3-4645-a889-c713e3930685',
+  'ebdbc830-7a7a-4984-b680-edf49574e828',
+  'b17815f6-0a75-447e-ae82-13c2135e8f55',
+  '8fec3366-7e59-4e74-a8a2-a61a9cc4454b',
+  '6279934a-3700-4f52-b511-3935091b16cb',
+  '4a766a12-c433-4dbf-a316-833bac154852',
+  'b66d9be5-4524-4bc3-aa72-9d83f0644b93',
+  '3b88a109-6fe5-4947-8b3c-30f7e041d2e3',
+  '621d89b8-6f87-46da-b464-e36c3ab44a7f',
+  '1608b95d-c202-4d79-948a-2f8eb2d58ef0',
+  'aee69aec-b98b-42ad-8268-0d367029cfe8',
+  'd51ae9b1-6924-4744-b424-cbecebfb9b47',
+  'bf573175-b95d-4d3c-9bed-77d16fb2936d',
+  'fdf88b51-e6aa-48a7-bb38-fadfe2b84b53',
+  'cc4427ce-0c95-40ed-b009-715e3e4504cc',
+  'd34e9f49-83c5-4f2f-ac8f-2b2b74d8f161',
+  'fb049603-01d7-4685-9dda-52ac00a9d631',
+  '8c3b80b1-4ec9-44dc-8240-9c15b9c608ca',
+  '8ba61365-7526-48da-b48d-2932ad5ba300',
+  '96283fc5-f928-450f-8d14-70fc8fa78ec5',
+  '671b2de1-96e6-4e7b-b7af-72873f000c6b',
+  '466dda97-db3e-4972-aa6c-793706f61c54',
+  '6ebc0afa-45ab-4926-a375-e07b9ac0ef5d',
+  '8f346bac-12f5-4484-bb7e-47f373bac4fb',
+  '9beff54a-6c05-43fc-83f9-b7ce7ee674be',
+  'ef9e0ccf-b65f-4a8c-94e4-b755527cfd61',
+  'ffba9a67-d66e-4716-9ac4-44018d20eeed',
+  '59c38d01-1d0a-4cbe-be0b-ba7e9709a080',
+  '4fcf9c01-4f7c-4b41-99f4-b5dfbd5bf705',
+  '397b53b8-88a1-4b74-bf02-9c5f3d9e3325',
+  '114a4a94-0609-4b76-b07f-94e8332b1037',
+  'e9ac97ff-bc48-4cfa-a91b-2eee0ffd4d17',
+  'bdce959c-be30-447d-b993-2c6346db67f2',
+  '8ba764aa-88b9-42e5-b7c8-bac29eeb93a4',
+  'b96e20c0-c3de-4cee-a120-e0659c67f83e',
+  '8c807bd4-a90e-4ecf-85de-278a3221139b',
+  '514cc20c-8bdd-4d15-af43-442354684dcd',
+  '9ffa74e6-a098-4d90-ae44-b10df9d19cc2',
+  'ea0ddc01-dce3-4295-aa33-8390981fee3b',
+  'fbec0ce1-4124-463f-b740-eb8c7520defa',
+  '356a8be0-6fd2-4e56-988b-8f2e13664239',
+  '09b684fe-0315-46b5-b1fd-6b434a7460d5',
+  '1fbcc1ce-16b6-4882-8cbe-8a209362a543',
+  'a7140eed-4b26-4710-823e-b8c04343c59c',
+  'a8108c4c-6e8e-46bf-aad5-d154d8177445',
+  '82afdf0c-3e0c-447b-8a40-095ca2c246ec',
+  'fe3e66cf-79b8-47f6-9bf1-a7ad82fcc824',
+  'dde5ac3b-7233-4a8a-923f-20eb5a2c9896',
+  '53381e40-5954-40d2-bdf3-49f4e53058f4',
+  '5bcac775-b0fe-46f5-9b37-211b55485af1',
+  '98c8b5cc-d972-413b-abd8-b764209458a4',
+]);
+
 type WeHavePartsMatch = {
   vehicleJobNumber: string;
   statusPriority: string;
@@ -501,11 +589,11 @@ function buildWeHavePartsMatches(
     isPostRepair(r)
   );
 
-  // Stock parts = any row with a non-empty Set Key (each stock part has a unique UUID).
-  // Must also have at least a Model or Make to be useful for matching.
+  // Stock parts = rows whose Set Key UUID is in the hard-coded STOCK_SET_KEYS allow-list.
+  // This list represents the physical inventory currently sitting in the container.
   const stockParts = partsData.filter((p) => {
-    if (!getSetKey(p)) return false;
-    return !!(normalize(getPartModel(p)) || normalize(getPartMake(p)));
+    const key = getSetKey(p).toLowerCase();
+    return STOCK_SET_KEYS.has(key);
   });
 
   // Forgiving match: equal, or either string contains the other.
@@ -1189,7 +1277,7 @@ export default function Page() {
       count: weHavePartsMatches.length,
       rows: [],
       description: 'Stock (Job 000) parts that match vehicles currently in the lot',
-      info: 'Scans Job 000 parts in the PARTS sheet (stock inventory) and matches their Model and Make (sometimes the Make is written in the Model field on the cycle time sheet) to any vehicle currently in Vehicle On-Site, Insurance Approval, Repair Approved, PDR Approved, PDR In-Progress, or Post Repair. The goal is to use up old stock before ordering new parts.',
+      info: 'Scans the PARTS sheet for the specific Set Key UUIDs that represent current stock inventory, then matches their Model and Make (sometimes the Make is written in the Model field on the cycle time sheet) to any vehicle currently in Vehicle On-Site, Insurance Approval, Repair Approved, PDR Approved, PDR In-Progress, or Post Repair. The goal is to use up old stock before ordering new parts. The stock Set Keys list is maintained in the code.',
       section: 'Inventory',
       detailType: 'we-have-parts',
     },
