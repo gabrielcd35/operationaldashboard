@@ -52,6 +52,17 @@ function toText(value: unknown): string {
   return String(value).trim();
 }
 
+
+function formatDate(value: unknown): string {
+  const s = toText(value);
+  if (!s) return '';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${mm}/${dd}/${yyyy}`;
+}
 function normalize(value: unknown): string {
   return toText(value).toLowerCase();
 }
@@ -1417,7 +1428,7 @@ export default function Page() {
                             <p className="font-semibold text-blue-700">{toText(item.row['Job Number'])}</p>
                             {toText(getDateStartValue(item.row)) && <p><span className="font-semibold text-slate-500">Start:</span> {toText(getDateStartValue(item.row))}</p>}
                             {toText(getRepairApprovedDateValue(item.row)) && <p><span className="font-semibold text-slate-500">Repair Approved:</span> {toText(getRepairApprovedDateValue(item.row))}</p>}
-                            {toText(getDateEndValue(item.row)) && <p><span className="font-semibold text-slate-500">End:</span> {toText(getDateEndValue(item.row))}</p>}
+                            {formatDate(getDateEndValue(item.row)) && <p><span className="font-semibold text-slate-500">End:</span> {formatDate(getDateEndValue(item.row))}</p>}
                             {toText(getQcNotCompletedValue(item.row)) && <p><span className="font-semibold text-slate-500">QC:</span> {toText(getQcNotCompletedValue(item.row))}</p>}
                             {item.issues.length > 0 && <p className="italic text-slate-700">{item.issues.join(', ')}</p>}
                           </div>
@@ -1442,7 +1453,7 @@ export default function Page() {
                                 <td className="p-3 font-medium">{toText(item.row['Job Number'])}</td>
                                 <td className="p-3">{toText(getDateStartValue(item.row))}</td>
                                 <td className="p-3">{toText(getRepairApprovedDateValue(item.row))}</td>
-                                <td className="p-3">{toText(getDateEndValue(item.row))}</td>
+                                <td className="p-3">{formatDate(getDateEndValue(item.row))}</td>
                                 <td className="p-3">{toText(getQcNotCompletedValue(item.row))}</td>
                                 <td className="p-3 italic text-slate-700">{item.issues.join(', ')}</td>
                               </tr>
@@ -1590,6 +1601,60 @@ export default function Page() {
               </div>
               {copyMessage && <p className="mt-3 text-sm text-slate-600">{copyMessage}</p>}
               <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
+                {/* Mobile card view */}
+                <div className="sm:hidden divide-y divide-slate-200">
+                  {selectedAlert.rows.map((r, i) => {
+                    const delayed = isRowDelayed(r);
+                    const jobNum = toText(r['Job Number']);
+                    const partsInfo = selectedAlert.id === 'general-parts'
+                      ? getPartsInfoForJob(jobNum, partsData)
+                      : null;
+                    const glassParts = selectedAlert.id === 'glass-install-after-delivery'
+                      ? getGlassPartsForJob(jobNum, partsData)
+                      : null;
+                    return (
+                      <div
+                        key={`${selectedAlert.id}-card-${i}`}
+                        className={`p-3 space-y-1 text-sm ${delayed ? 'bg-red-50' : 'bg-white'}`}
+                      >
+                        <p className="font-semibold text-blue-700">{jobNum}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                          <p><span className="font-semibold text-slate-500">Priority:</span> {toText(r['Priority'])}</p>
+                          <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
+                        </div>
+                        <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
+                        <p><span className="font-semibold text-slate-500">Days:</span> <span className={delayed ? 'font-bold text-red-600' : ''}>{toText(r['Status Days'])}</span></p>
+                        {partsInfo && (
+                          <div>
+                            {partsInfo.arrived.length > 0 && <p><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</p>}
+                            {partsInfo.missing.length > 0 && <p><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</p>}
+                            {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && <p className="text-slate-400 italic">No parts data</p>}
+                          </div>
+                        )}
+                        {glassParts && (
+                          <div>
+                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
+                            {glassParts.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-0.5">
+                                {glassParts.map((gp, gi) => (
+                                  <span key={gi} className={`text-xs font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
+                                    {gp.arrived ? '✓' : '⏳'} {gp.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!partsInfo && !glassParts && (
+                          <div>
+                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
+                            {formatDate(r['Body ECD']) && <p><span className="font-semibold text-slate-500">Body ECD:</span> {formatDate(r['Body ECD'])}</p>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
                 {/* Desktop table view */}
                 <table className="hidden md:table w-full text-sm">
                   <thead className="bg-slate-50">
@@ -1677,7 +1742,7 @@ export default function Page() {
                           ) : (
                             <>
                               <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>
-                              <td className="p-3">{toText(r['Body ECD'])}</td>
+                              <td className="p-3">{formatDate(r['Body ECD'])}</td>
                             </>
                           )}
                         </tr>
@@ -1748,7 +1813,7 @@ export default function Page() {
                       ) : (
                         <div className="mt-2 text-xs text-slate-700 space-y-1">
                           <p><span className="font-semibold">Task Titles:</span> {toText(r['Task Titles']) || <span className="italic text-slate-400">—</span>}</p>
-                          <p><span className="font-semibold">Body ECD:</span> {toText(r['Body ECD']) || <span className="italic text-slate-400">—</span>}</p>
+                          <p><span className="font-semibold">Body ECD:</span> {formatDate(r['Body ECD']) || <span className="italic text-slate-400">—</span>}</p>
                         </div>
                       )}
                     </div>
@@ -2091,8 +2156,8 @@ export default function Page() {
                           <td className={`p-3 ${delayed ? 'font-bold text-red-600' : 'font-medium'}`}>{toText(r['Status Days'])}</td>
                           <td className="p-3">{toText(r['SA'])}</td>
                           {selectedMain.id === 'post-repair-main' && <td className="p-3 max-w-md">{toText(r['Task Titles'])}</td>}
-                          {selectedMain.id === 'conventional-hail-main' && <td className="p-3">{toText(r['Body ECD'])}</td>}
-                          {selectedMain.id === 'ready-to-deliver-main' && <td className="p-3">{toText(getDateEndValue(r))}</td>}
+                          {selectedMain.id === 'conventional-hail-main' && <td className="p-3">{formatDate(r['Body ECD'])}</td>}
+                          {selectedMain.id === 'ready-to-deliver-main' && <td className="p-3">{formatDate(getDateEndValue(r))}</td>}
                         </tr>
                       );
                     })}
