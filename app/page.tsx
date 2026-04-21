@@ -15,7 +15,7 @@ type AlertCard = {
   description: string;
   info: string;
   section: 'Operations' | 'Parts' | 'Conventional' | 'Inventory';
-  detailType?: 'default' | 'sa-monthly-qc' | 'must-return';
+  detailType?: 'default' | 'sa-monthly-qc' | 'must-return' | 'missing-install';
 };
 
 type MustReturnGroup = {
@@ -391,6 +391,60 @@ function getGlassPartsForJob(
       name: getPartName(p),
       arrived: !isBlank(getColumnValue(p, ['Received At', 'received at', 'received_at'])),
     }));
+}
+
+type MissingInstallGroup = {
+  jobNumber: string;
+  statusPriority: string;
+  items: { name: string; received: boolean }[];
+};
+
+function buildMissingInstallGroups(
+  partsData: PartsRow[],
+  rows: DashboardRow[]
+): MissingInstallGroup[] {
+  const qualifyingJobs = new Map<string, string>();
+  for (const r of rows) {
+    if (isPostRepair(r) || isVehicleDeliveredHail(r)) {
+      const jn = normalize(toText(r['Job Number']));
+      if (jn && jn !== '000') qualifyingJobs.set(jn, toText(r['Status + Priority']));
+    }
+  }
+
+  const orderedAtKeys   = ['Ordered At', 'ordered at', 'ordered_at'];
+  const receivedAtKeys  = ['Received At', 'received at', 'received_at'];
+  const checkedOutKeys  = ['Checked Out At', 'checked out at', 'checked_out_at'];
+
+  const flaggedParts = partsData.filter((p) => {
+    const jn = normalize(getPartJobNumber(p));
+    if (!jn || jn === '000') return false;
+    if (!qualifyingJobs.has(jn)) return false;
+    if (isBlank(getColumnValue(p, orderedAtKeys))) return false;
+    return (
+      isBlank(getColumnValue(p, receivedAtKeys)) ||
+      isBlank(getColumnValue(p, checkedOutKeys))
+    );
+  });
+
+  const groups = new Map<string, MissingInstallGroup>();
+  for (const part of flaggedParts) {
+    const jn = getPartJobNumber(part);
+    const jnKey = normalize(jn);
+    const received = !isBlank(getColumnValue(part, receivedAtKeys));
+    const existing = groups.get(jnKey);
+    const item = { name: getPartName(part), received };
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      groups.set(jnKey, {
+        jobNumber: jn,
+        statusPriority: qualifyingJobs.get(jnKey) ?? '',
+        items: [item],
+      });
+    }
+  }
+
+  return Array.from(groups.values()).sort((a, b) => b.items.length - a.items.length);
 }
 
 function buildMustReturnGroups(
@@ -1005,6 +1059,7 @@ export default function Page() {
   const mainCards = useMemo(() => buildMainCards(rows), [rows]);
 
   const mustReturnGroups = useMemo(() => buildMustReturnGroups(partsData, rows), [partsData, rows]);
+  const missingInstallGroups = useMemo(() => buildMissingInstallGroups(partsData, rows), [partsData, rows]);
 
   const wipCount = useMemo(() => rows.filter((r) =>
     isVehicleOnSite(r) || isInsuranceApproval(r) || isRepairApproved(r) ||
@@ -1022,7 +1077,17 @@ export default function Page() {
       section: 'Inventory',
       detailType: 'must-return',
     },
-  ], [mustReturnGroups]);
+    {
+      id: 'missing-install',
+      title: 'Missing Install / Not Checked Out',
+      count: missingInstallGroups.length,
+      rows: [],
+      description: 'Post Repair / Delivered jobs with parts not received or checked out',
+      info: 'For jobs where Status + Priority is Post Repair or Vehicle Delivered (Hail), flags parts that have an Ordered At date but are missing either Received At or Checked Out At. Helps catch parts that need check-out before install, or install that was skipped before delivery. Ignores job 000.',
+      section: 'Inventory',
+      detailType: 'missing-install',
+    },
+  ], [mustReturnGroups, missingInstallGroups]);
 
   const allAlertCards = useMemo(() => [...alertCards, ...inventoryAlertCards], [alertCards, inventoryAlertCards]);
 
@@ -1346,7 +1411,7 @@ export default function Page() {
                         <p className="mt-1 text-sm text-slate-600">{bucket.items.length} flagged job(s)</p>
                       </div>
                       {/* Mobile card view */}
-                      <div className="sm:hidden divide-y divide-slate-200">
+                      <div className="md:hidden divide-y divide-slate-200">
                         {bucket.items.map((item, index) => (
                           <div key={`${bucket.sa}-monthly-qc-m-${index}`} className="p-3 bg-white space-y-1 text-sm">
                             <p className="font-semibold text-blue-700">{toText(item.row['Job Number'])}</p>
@@ -1404,7 +1469,7 @@ export default function Page() {
               ) : (
                 <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
                   {/* Mobile card view */}
-                  <div className="sm:hidden divide-y divide-slate-200">
+                  <div className="md:hidden divide-y divide-slate-200">
                     {mustReturnGroups.map((group, i) => (
                       <div key={`must-return-m-${i}`} className="p-3 bg-white space-y-1 text-sm">
                         <p className="font-semibold text-blue-700">{group.jobNumber}</p>
@@ -1415,7 +1480,7 @@ export default function Page() {
                     ))}
                   </div>
                   {/* Desktop table view */}
-                  <table className="hidden sm:table w-full text-sm">
+                  <table className="hidden md:table w-full text-sm">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-300">
                         <th className="p-3 text-left font-semibold">Job Number</th>
@@ -1431,6 +1496,77 @@ export default function Page() {
                           <td className="p-3 font-bold text-red-600">{group.maxDays}</td>
                           <td className="p-3">{group.parts.join(', ')}</td>
                           <td className="p-3">{group.statusPriority}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : selectedAlert.detailType === 'missing-install' ? (
+            <>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <h3 className="text-xl font-semibold">{selectedAlert.title}</h3>
+                  <p className="mt-1 text-slate-600">{missingInstallGroups.length} job(s) with parts outstanding</p>
+                </div>
+                <button onClick={() => setSelectedAlertId(null)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Clear</button>
+              </div>
+              {missingInstallGroups.length === 0 ? (
+                <p className="mt-6 text-slate-600">All parts accounted for. Nothing outstanding at this time.</p>
+              ) : (
+                <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
+                  {/* Mobile card view */}
+                  <div className="md:hidden divide-y divide-slate-200">
+                    {missingInstallGroups.map((group, i) => (
+                      <div key={`mi-m-${i}`} className="p-3 bg-white space-y-1 text-sm">
+                        <p className="font-semibold text-blue-700">{group.jobNumber}</p>
+                        <p><span className="font-semibold text-slate-500">Status:</span> {group.statusPriority}</p>
+                        <ul className="space-y-0.5 mt-1">
+                          {group.items.map((it, idx) => (
+                            <li key={idx} className="flex items-center gap-1.5 text-xs">
+                              <span className={it.received ? 'text-orange-500 font-bold' : 'text-red-600 font-bold'}>
+                                {it.received ? '📦' : '⏳'}
+                              </span>
+                              <span>{it.name}</span>
+                              <span className={`text-[10px] font-semibold ${it.received ? 'text-orange-500' : 'text-red-600'}`}>
+                                {it.received ? 'Received — Not Checked Out' : 'Not Received'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Desktop table view */}
+                  <table className="hidden md:table w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b border-slate-300">
+                        <th className="p-3 text-left font-semibold">Job Number</th>
+                        <th className="p-3 text-left font-semibold">Status + Priority</th>
+                        <th className="p-3 text-left font-semibold">Part(s) Outstanding</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {missingInstallGroups.map((group, i) => (
+                        <tr key={`mi-${i}`} className="border-b border-slate-200 align-top bg-white">
+                          <td className="p-3 font-semibold text-blue-700">{group.jobNumber}</td>
+                          <td className="p-3">{group.statusPriority}</td>
+                          <td className="p-3">
+                            <ul className="space-y-0.5">
+                              {group.items.map((it, idx) => (
+                                <li key={idx} className="flex items-center gap-1.5 text-xs">
+                                  <span className={it.received ? 'text-orange-500 font-bold' : 'text-red-600 font-bold'}>
+                                    {it.received ? '📦' : '⏳'}
+                                  </span>
+                                  <span>{it.name}</span>
+                                  <span className={`text-[10px] font-semibold ${it.received ? 'text-orange-500' : 'text-red-600'}`}>
+                                    {it.received ? 'Received — Not Checked Out' : 'Not Received'}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1454,62 +1590,8 @@ export default function Page() {
               </div>
               {copyMessage && <p className="mt-3 text-sm text-slate-600">{copyMessage}</p>}
               <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
-                {/* Mobile card view */}
-                <div className="sm:hidden divide-y divide-slate-200">
-                  {selectedAlert.rows.map((r, i) => {
-                    const delayed = isRowDelayed(r);
-                    const jobNum = toText(r['Job Number']);
-                    const partsInfo = selectedAlert.id === 'general-parts'
-                      ? getPartsInfoForJob(jobNum, partsData)
-                      : null;
-                    const glassParts = selectedAlert.id === 'glass-install-after-delivery'
-                      ? getGlassPartsForJob(jobNum, partsData)
-                      : null;
-                    return (
-                      <div
-                        key={`${selectedAlert.id}-card-${i}`}
-                        className={`p-3 space-y-1 text-sm ${delayed ? 'bg-red-50' : 'bg-white'}`}
-                      >
-                        <p className="font-semibold text-blue-700">{jobNum}</p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                          <p><span className="font-semibold text-slate-500">Priority:</span> {toText(r['Priority'])}</p>
-                          <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
-                        </div>
-                        <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
-                        <p><span className="font-semibold text-slate-500">Days:</span> <span className={delayed ? 'font-bold text-red-600' : ''}>{toText(r['Status Days'])}</span></p>
-                        {partsInfo && (
-                          <div>
-                            {partsInfo.arrived.length > 0 && <p><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</p>}
-                            {partsInfo.missing.length > 0 && <p><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</p>}
-                            {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && <p className="text-slate-400 italic">No parts data</p>}
-                          </div>
-                        )}
-                        {glassParts && (
-                          <div>
-                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
-                            {glassParts.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-0.5">
-                                {glassParts.map((gp, gi) => (
-                                  <span key={gi} className={`text-xs font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
-                                    {gp.arrived ? '✓' : '⏳'} {gp.name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {!partsInfo && !glassParts && (
-                          <div>
-                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
-                            {toText(r['Body ECD']) && <p><span className="font-semibold text-slate-500">Body ECD:</span> {toText(r['Body ECD'])}</p>}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
                 {/* Desktop table view */}
-                <table className="hidden sm:table w-full text-sm">
+                <table className="hidden md:table w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr className="border-b border-slate-300">
                       <th className="p-3 text-left font-semibold">Job Number</th>
@@ -1716,7 +1798,7 @@ export default function Page() {
                     </div>
                     <div className="rounded-2xl border border-slate-300 overflow-hidden">
                       {/* Mobile card view */}
-                      <div className="sm:hidden divide-y divide-slate-200">
+                      <div className="md:hidden divide-y divide-slate-200">
                         {bucket.rows.map((r, i) => {
                           const delayed = isRowDelayed(r);
                           return (
@@ -1737,7 +1819,7 @@ export default function Page() {
                         })}
                       </div>
                       {/* Desktop table view */}
-                      <table className="hidden sm:table w-full text-sm text-left">
+                      <table className="hidden md:table w-full text-sm text-left">
                         <thead className="bg-slate-50">
                           <tr className="border-b border-slate-300">
                             <th className="p-3 font-semibold">Job Number</th>
@@ -1793,7 +1875,7 @@ export default function Page() {
                     </div>
                     <div className="rounded-2xl border border-slate-300 overflow-hidden">
                       {/* Mobile card view */}
-                      <div className="sm:hidden divide-y divide-slate-200">
+                      <div className="md:hidden divide-y divide-slate-200">
                         {selectedSaRows.map((r, i) => (
                           <div key={`sa-card-${i}`} className="p-3 space-y-1 text-sm bg-white">
                             <p className="font-medium text-blue-700">{toText(r['Job Number'])}</p>
@@ -1806,7 +1888,7 @@ export default function Page() {
                         ))}
                       </div>
                       {/* Desktop table view */}
-                      <table className="hidden sm:table w-full text-sm">
+                      <table className="hidden md:table w-full text-sm">
                         <thead className="bg-slate-50">
                           <tr className="border-b border-slate-300">
                             <th className="p-3 text-left font-semibold">Job Number</th>
@@ -1905,7 +1987,7 @@ export default function Page() {
                 </div>
                 <div className="rounded-2xl border border-slate-300 overflow-hidden">
                   {/* Mobile card view */}
-                  <div className="sm:hidden divide-y divide-slate-200">
+                  <div className="md:hidden divide-y divide-slate-200">
                     {deliveredHailStats.deliveredRows.map((r, i) => (
                       <div key={i} className="p-3 space-y-1 text-sm bg-white">
                         <p className="font-medium">{toText(r['Job Number'])}</p>
@@ -1921,7 +2003,7 @@ export default function Page() {
                     ))}
                   </div>
                   {/* Desktop table view */}
-                  <table className="hidden sm:table w-full text-sm text-left">
+                  <table className="hidden md:table w-full text-sm text-left">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-300">
                         <th className="p-3 font-semibold">Job Number</th>
@@ -1954,7 +2036,7 @@ export default function Page() {
             ) : (
               <div className="mt-8 rounded-2xl border border-slate-300 overflow-hidden">
                 {/* Mobile card view */}
-                <div className="sm:hidden divide-y divide-slate-200">
+                <div className="md:hidden divide-y divide-slate-200">
                   {selectedMain.rows.map((r, i) => {
                     const delayed = isRowDelayed(r);
                     return (
@@ -1969,12 +2051,21 @@ export default function Page() {
                           <p><span className="font-semibold text-slate-500">Days:</span> <span className={delayed ? 'font-bold text-red-600' : 'font-medium'}>{toText(r['Status Days'])}</span></p>
                           {toText(r['SA']) && <p><span className="font-semibold text-slate-500">SA:</span> {toText(r['SA'])}</p>}
                         </div>
+                        {selectedMain.id === 'post-repair-main' && (
+                          <p><span className="font-semibold text-slate-500">Task Titles:</span> {toText(r['Task Titles']) || <span className="italic text-slate-400">—</span>}</p>
+                        )}
+                        {selectedMain.id === 'conventional-hail-main' && (
+                          <p><span className="font-semibold text-slate-500">Body ECD:</span> {toText(r['Body ECD']) || <span className="italic text-slate-400">—</span>}</p>
+                        )}
+                        {selectedMain.id === 'ready-to-deliver-main' && (
+                          <p><span className="font-semibold text-slate-500">date_end:</span> {toText(getDateEndValue(r)) || <span className="italic text-slate-400">—</span>}</p>
+                        )}
                       </div>
                     );
                   })}
                 </div>
                 {/* Desktop table view */}
-                <table className="hidden sm:table w-full text-sm text-left">
+                <table className="hidden md:table w-full text-sm text-left">
                   <thead className="bg-slate-50">
                     <tr className="border-b border-slate-300">
                       <th className="p-3 font-semibold">Job Number</th>
