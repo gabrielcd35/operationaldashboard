@@ -569,10 +569,7 @@ const STOCK_SET_KEYS = new Set<string>([
 type WeHavePartsMatch = {
   vehicleJobNumber: string;
   statusPriority: string;
-  partName: string;
-  year: string;
-  make: string;
-  model: string;
+  parts: { name: string; year: string; make: string; model: string }[];
 };
 
 function buildWeHavePartsMatches(
@@ -603,29 +600,37 @@ function buildWeHavePartsMatches(
     return a === b || a.includes(b) || b.includes(a);
   };
 
-  const matches: WeHavePartsMatch[] = [];
+  // Group by vehicle: one entry per job number, all matching stock parts collected together.
+  const byJob = new Map<string, WeHavePartsMatch>();
   for (const r of qualifying) {
     const vehicleModel = normalize(r['Model']).replace(/\s+/g, ' ').trim();
     if (!vehicleModel) continue;
     for (const p of stockParts) {
       const partModel = normalize(getPartModel(p)).replace(/\s+/g, ' ').trim();
       const partMake  = normalize(getPartMake(p)).replace(/\s+/g, ' ').trim();
-      // Match dashboard Model against either parts Model OR parts Make,
-      // because sometimes the Make is written in the Model field on the cycle time sheet.
       if (modelsMatch(vehicleModel, partModel) || modelsMatch(vehicleModel, partMake)) {
-        matches.push({
-          vehicleJobNumber: toText(r['Job Number']),
-          statusPriority: toText(r['Status + Priority']),
-          partName: getPartName(p),
+        const jn = toText(r['Job Number']);
+        const existing = byJob.get(jn);
+        const partEntry = {
+          name: getPartName(p),
           year: getPartYear(p),
           make: getPartMake(p),
           model: getPartModel(p),
-        });
+        };
+        if (existing) {
+          existing.parts.push(partEntry);
+        } else {
+          byJob.set(jn, {
+            vehicleJobNumber: jn,
+            statusPriority: toText(r['Status + Priority']),
+            parts: [partEntry],
+          });
+        }
       }
     }
   }
 
-  return matches.sort((a, b) =>
+  return Array.from(byJob.values()).sort((a, b) =>
     a.vehicleJobNumber.localeCompare(b.vehicleJobNumber, undefined, { numeric: true })
   );
 }
@@ -1773,14 +1778,18 @@ export default function Page() {
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                   <h3 className="text-xl font-semibold">{selectedAlert.title}</h3>
-                  <p className="mt-1 text-slate-600">{weHavePartsMatches.length} match(es) with stock inventory</p>
+                  <p className="mt-1 text-slate-600">{weHavePartsMatches.length} vehicle(s) with matching stock</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => handleCopyText(
-                      weHavePartsMatches.map((m) =>
-                        `${m.vehicleJobNumber} | ${m.statusPriority} | ${m.partName} | ${[m.year, m.make, m.model].filter(Boolean).join(' ')}`
-                      ).join('\n')
+                      weHavePartsMatches.map((m) => {
+                        const partsStr = m.parts.map((p) => p.name).join(', ');
+                        const fitsStr = Array.from(new Set(
+                          m.parts.map((p) => [p.year, p.make, p.model].filter(Boolean).join(' ')).filter(Boolean)
+                        )).join('; ');
+                        return `${m.vehicleJobNumber} | ${m.statusPriority} | ${partsStr} | ${fitsStr}`;
+                      }).join('\n')
                     )}
                     className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium flex items-center gap-2"
                   >
@@ -1796,14 +1805,21 @@ export default function Page() {
                 <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
                   {/* Mobile card view */}
                   <div className="md:hidden divide-y divide-slate-200">
-                    {weHavePartsMatches.map((m, i) => (
-                      <div key={`wh-m-${i}`} className="p-3 bg-white space-y-1 text-sm">
-                        <p className="font-semibold text-blue-700">{m.vehicleJobNumber}</p>
-                        <p><span className="font-semibold text-slate-500">Status:</span> {m.statusPriority}</p>
-                        <p><span className="font-semibold text-slate-500">Part:</span> <span className="font-semibold">{m.partName}</span></p>
-                        <p><span className="font-semibold text-slate-500">Fits:</span> {[m.year, m.make, m.model].filter(Boolean).join(' ')}</p>
-                      </div>
-                    ))}
+                    {weHavePartsMatches.map((m, i) => {
+                      const fits = Array.from(new Set(
+                        m.parts.map((p) => [p.year, p.make, p.model].filter(Boolean).join(' ')).filter(Boolean)
+                      ));
+                      return (
+                        <div key={`wh-m-${i}`} className="p-3 bg-white space-y-1 text-sm">
+                          <p className="font-semibold text-blue-700">{m.vehicleJobNumber}</p>
+                          <p><span className="font-semibold text-slate-500">Status:</span> {m.statusPriority}</p>
+                          <p><span className="font-semibold text-slate-500">Parts ({m.parts.length}):</span> {m.parts.map((p) => p.name).join(', ')}</p>
+                          {fits.length > 0 && (
+                            <p><span className="font-semibold text-slate-500">Fits:</span> {fits.join('; ')}</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   {/* Desktop table view */}
                   <table className="hidden md:table w-full text-sm">
@@ -1811,23 +1827,27 @@ export default function Page() {
                       <tr className="border-b border-slate-300">
                         <th className="p-3 text-left font-semibold">Job Number</th>
                         <th className="p-3 text-left font-semibold">Status + Priority</th>
-                        <th className="p-3 text-left font-semibold">Part Name</th>
-                        <th className="p-3 text-left font-semibold">Year</th>
-                        <th className="p-3 text-left font-semibold">Make</th>
-                        <th className="p-3 text-left font-semibold">Model</th>
+                        <th className="p-3 text-left font-semibold">Parts Available</th>
+                        <th className="p-3 text-left font-semibold">Year / Make / Model</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {weHavePartsMatches.map((m, i) => (
-                        <tr key={`wh-${i}`} className="border-b border-slate-200 align-top bg-white">
-                          <td className="p-3 font-semibold text-blue-700">{m.vehicleJobNumber}</td>
-                          <td className="p-3">{m.statusPriority}</td>
-                          <td className="p-3 font-semibold">{m.partName}</td>
-                          <td className="p-3">{m.year}</td>
-                          <td className="p-3">{m.make}</td>
-                          <td className="p-3">{m.model}</td>
-                        </tr>
-                      ))}
+                      {weHavePartsMatches.map((m, i) => {
+                        const fits = Array.from(new Set(
+                          m.parts.map((p) => [p.year, p.make, p.model].filter(Boolean).join(' ')).filter(Boolean)
+                        ));
+                        return (
+                          <tr key={`wh-${i}`} className="border-b border-slate-200 align-top bg-white">
+                            <td className="p-3 font-semibold text-blue-700">{m.vehicleJobNumber}</td>
+                            <td className="p-3">{m.statusPriority}</td>
+                            <td className="p-3">
+                              <span className="text-xs font-semibold text-slate-500">({m.parts.length}) </span>
+                              {m.parts.map((p) => p.name).join(', ')}
+                            </td>
+                            <td className="p-3 text-xs text-slate-600">{fits.join('; ')}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
