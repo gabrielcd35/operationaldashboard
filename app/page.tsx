@@ -1152,6 +1152,7 @@ export default function Page() {
   const searchRef = useRef<HTMLDivElement>(null);
   const alertDetailsRef = useRef<HTMLElement>(null);
   const [holidaysOpen, setHolidaysOpen] = useState(false);
+  const [hideZeroAlerts, setHideZeroAlerts] = useState(false);
   const [showBonus, setShowBonus] = useState(false);
   const [bonusUnlocked, setBonusUnlocked] = useState(false);
   const [bonusInput, setBonusInput] = useState('');
@@ -1529,12 +1530,38 @@ export default function Page() {
           </div>
         </section>
 
+        {/* Global alert filter toggle */}
+        <div className="flex justify-end -mb-4">
+          <button
+            onClick={() => setHideZeroAlerts((v) => !v)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              hideZeroAlerts
+                ? 'bg-slate-800 text-white border-slate-800 hover:bg-slate-700'
+                : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+            }`}
+            title={hideZeroAlerts ? 'Show all alerts' : 'Hide alerts with 0 count'}
+          >
+            {hideZeroAlerts ? '👁 Show all alerts' : '🙈 Hide zero alerts'}
+          </button>
+        </div>
+
         {/* Alert Sections */}
-        {(['Operations', 'Parts', 'Conventional'] as const).map((section) => (
+        {(['Operations', 'Parts', 'Conventional'] as const).map((section) => {
+          const visibleAlerts = hideZeroAlerts
+            ? grouped[section].filter((a) => a.count > 0)
+            : grouped[section];
+          const visibleInventory = hideZeroAlerts
+            ? grouped.Inventory.filter((a) => a.count > 0)
+            : grouped.Inventory;
+          // If hide is on and there's nothing left in this section (including Inventory for Parts), skip rendering
+          const sectionHasContent = visibleAlerts.length > 0 ||
+            (section === 'Parts' && visibleInventory.length > 0);
+          if (hideZeroAlerts && !sectionHasContent) return null;
+          return (
           <section key={section} className="space-y-4">
             <h2 className="text-2xl font-semibold">{section}</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-              {grouped[section].map((alert) => (
+              {visibleAlerts.map((alert) => (
                 <div key={alert.id} className={`rounded-xl border p-3 shadow-sm min-h-[108px] ${alertColorClasses(alert.id, alert.count)} ${selectedAlertId === alert.id ? 'ring-2 ring-slate-900' : ''}`}>
                   <div className="flex items-start justify-between gap-2">
                     <button type="button" onClick={() => setSelectedAlertId(alert.id)} className="min-w-0 flex-1 text-left">
@@ -1552,11 +1579,11 @@ export default function Page() {
             </div>
 
             {/* Inventory Control subsection — shown inside Parts */}
-            {section === 'Parts' && (
+            {section === 'Parts' && visibleInventory.length > 0 && (
               <div className="space-y-3 pt-2">
                 <h3 className="text-lg font-semibold text-slate-600">Inventory Control</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                  {grouped.Inventory.map((alert) => (
+                  {visibleInventory.map((alert) => (
                     <div key={alert.id} className={`rounded-xl border p-3 shadow-sm min-h-[108px] ${alertColorClasses(alert.id, alert.count)} ${selectedAlertId === alert.id ? 'ring-2 ring-slate-900' : ''}`}>
                       <div className="flex items-start justify-between gap-2">
                         <button type="button" onClick={() => setSelectedAlertId(alert.id)} className="min-w-0 flex-1 text-left">
@@ -1575,7 +1602,8 @@ export default function Page() {
               </div>
             )}
           </section>
-        ))}
+        );
+        })}
 
         {/* Selected Alert Details Table */}
         <section ref={alertDetailsRef} className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
