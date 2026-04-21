@@ -428,7 +428,7 @@ function buildMissingInstallGroups(
 ): MissingInstallGroup[] {
   const qualifyingJobs = new Map<string, string>();
   for (const r of rows) {
-    if (isPostRepair(r) || isVehicleDeliveredHail(r)) {
+    if (isPostRepair(r) || isReadyToDeliver(r) || isVehicleDeliveredHail(r)) {
       const jn = normalize(toText(r['Job Number']));
       if (jn && jn !== '000') qualifyingJobs.set(jn, toText(r['Status + Priority']));
     }
@@ -1160,8 +1160,8 @@ export default function Page() {
       title: 'Missing Install / Not Checked Out',
       count: missingInstallGroups.length,
       rows: [],
-      description: 'Post Repair / Delivered jobs with parts not received or checked out',
-      info: 'For jobs where Status + Priority is Post Repair or Vehicle Delivered (Hail), flags parts that have an Ordered At date but are missing either Received At or Checked Out At. Helps catch parts that need check-out before install, or install that was skipped before delivery. Ignores job 000.',
+      description: 'Post Repair / Ready to Deliver / Delivered jobs with parts not received or checked out',
+      info: 'For jobs where Status + Priority is Post Repair, Ready to Deliver, or Vehicle Delivered (Hail), flags parts that have an Ordered At date but are missing either Received At or Checked Out At. Helps catch parts that need check-out before install, or install that was skipped before delivery. Ignores job 000.',
       section: 'Inventory',
       detailType: 'missing-install',
     },
