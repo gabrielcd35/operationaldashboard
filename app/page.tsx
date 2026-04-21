@@ -493,23 +493,30 @@ function buildWeHavePartsMatches(
     isPostRepair(r)
   );
 
-  // Stock parts (Job "000") that have a Model
+  // Stock parts (Job "000", also handles "0" if sheet stored as number) that have a Model
   const stockParts = partsData.filter((p) => {
     const jn = normalize(getPartJobNumber(p));
-    if (jn !== '000') return false;
+    if (jn !== '000' && jn !== '0') return false;
     return !!normalize(getPartModel(p));
   });
 
+  // Forgiving match: equal, or either string contains the other.
+  // Handles "Civic" vs "Civic LX" vs "Honda Civic" vs trailing/extra whitespace.
+  const modelsMatch = (a: string, b: string) => {
+    if (!a || !b) return false;
+    return a === b || a.includes(b) || b.includes(a);
+  };
+
   const matches: WeHavePartsMatch[] = [];
   for (const r of qualifying) {
-    const vehicleModel = normalize(r['Model']);
+    const vehicleModel = normalize(r['Model']).replace(/\s+/g, ' ').trim();
     if (!vehicleModel) continue;
     for (const p of stockParts) {
-      const partModel = normalize(getPartModel(p));
-      const partMake  = normalize(getPartMake(p));
+      const partModel = normalize(getPartModel(p)).replace(/\s+/g, ' ').trim();
+      const partMake  = normalize(getPartMake(p)).replace(/\s+/g, ' ').trim();
       // Match dashboard Model against either parts Model OR parts Make,
       // because sometimes the Make is written in the Model field on the cycle time sheet.
-      if ((partModel && partModel === vehicleModel) || (partMake && partMake === vehicleModel)) {
+      if (modelsMatch(vehicleModel, partModel) || modelsMatch(vehicleModel, partMake)) {
         matches.push({
           vehicleJobNumber: toText(r['Job Number']),
           statusPriority: toText(r['Status + Priority']),
