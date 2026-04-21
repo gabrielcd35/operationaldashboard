@@ -506,7 +506,10 @@ function buildWeHavePartsMatches(
     if (!vehicleModel) continue;
     for (const p of stockParts) {
       const partModel = normalize(getPartModel(p));
-      if (partModel && partModel === vehicleModel) {
+      const partMake  = normalize(getPartMake(p));
+      // Match dashboard Model against either parts Model OR parts Make,
+      // because sometimes the Make is written in the Model field on the cycle time sheet.
+      if ((partModel && partModel === vehicleModel) || (partMake && partMake === vehicleModel)) {
         matches.push({
           vehicleJobNumber: toText(r['Job Number']),
           statusPriority: toText(r['Status + Priority']),
@@ -1171,7 +1174,7 @@ export default function Page() {
       count: weHavePartsMatches.length,
       rows: [],
       description: 'Stock (Job 000) parts that match vehicles currently in the lot',
-      info: 'Scans Job 000 parts in the PARTS sheet (stock inventory) and matches their Model to any vehicle currently in Vehicle On-Site, Insurance Approval, Repair Approved, PDR Approved, PDR In-Progress, or Post Repair. The goal is to use up old stock before ordering new parts.',
+      info: 'Scans Job 000 parts in the PARTS sheet (stock inventory) and matches their Model and Make (sometimes the Make is written in the Model field on the cycle time sheet) to any vehicle currently in Vehicle On-Site, Insurance Approval, Repair Approved, PDR Approved, PDR In-Progress, or Post Repair. The goal is to use up old stock before ordering new parts.',
       section: 'Inventory',
       detailType: 'we-have-parts',
     },
@@ -1669,8 +1672,21 @@ export default function Page() {
                   <h3 className="text-xl font-semibold">{selectedAlert.title}</h3>
                   <p className="mt-1 text-slate-600">{weHavePartsMatches.length} match(es) with stock inventory</p>
                 </div>
-                <button onClick={() => setSelectedAlertId(null)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Clear</button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleCopyText(
+                      weHavePartsMatches.map((m) =>
+                        `${m.vehicleJobNumber} | ${m.statusPriority} | ${m.partName} | ${[m.year, m.make, m.model].filter(Boolean).join(' ')}`
+                      ).join('\n')
+                    )}
+                    className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium flex items-center gap-2"
+                  >
+                    <span>📋</span><span>Copy Matches</span>
+                  </button>
+                  <button onClick={() => setSelectedAlertId(null)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Clear</button>
+                </div>
               </div>
+              {copyMessage && <p className="mt-3 text-sm text-slate-600">{copyMessage}</p>}
               {weHavePartsMatches.length === 0 ? (
                 <p className="mt-6 text-slate-600">No stock parts currently match any vehicle in the lot.</p>
               ) : (
