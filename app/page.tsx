@@ -371,6 +371,14 @@ function getPartYear(part: PartsRow): string {
   return toText(getColumnValue(part, ['Year', 'year']));
 }
 
+function getSetKey(part: PartsRow): string {
+  return toText(getColumnValue(part, ['Set Key', 'set key', 'SetKey', 'set_key']));
+}
+
+function getPartEta(part: PartsRow): string {
+  return toText(getColumnValue(part, ['ETA', 'eta', 'Eta']));
+}
+
 function daysSince(date: Date): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -380,7 +388,7 @@ function daysSince(date: Date): number {
 function getPartsInfoForJob(
   jobNumber: string,
   partsData: PartsRow[]
-): { arrived: string[]; missing: string[] } {
+): { arrived: string[]; missing: { name: string; eta: string }[] } {
   const jobParts = partsData.filter(
     (p) => normalize(getPartJobNumber(p)) === normalize(jobNumber)
   );
@@ -395,8 +403,8 @@ function getPartsInfoForJob(
       !isBlank(getColumnValue(p, orderedAtKeys)) &&
       isBlank(getColumnValue(p, receivedAtKeys))
     )
-    .map((p) => getPartName(p))
-    .filter(Boolean);
+    .map((p) => ({ name: getPartName(p), eta: getPartEta(p) }))
+    .filter((m) => m.name);
   return { arrived, missing };
 }
 
@@ -493,11 +501,11 @@ function buildWeHavePartsMatches(
     isPostRepair(r)
   );
 
-  // Stock parts (Job "000", also handles "0" if sheet stored as number) that have a Model
+  // Stock parts = any row with a non-empty Set Key (each stock part has a unique UUID).
+  // Must also have at least a Model or Make to be useful for matching.
   const stockParts = partsData.filter((p) => {
-    const jn = normalize(getPartJobNumber(p));
-    if (jn !== '000' && jn !== '0') return false;
-    return !!normalize(getPartModel(p));
+    if (!getSetKey(p)) return false;
+    return !!(normalize(getPartModel(p)) || normalize(getPartMake(p)));
   });
 
   // Forgiving match: equal, or either string contains the other.
@@ -1753,60 +1761,6 @@ export default function Page() {
               </div>
               {copyMessage && <p className="mt-3 text-sm text-slate-600">{copyMessage}</p>}
               <div className="mt-6 rounded-2xl border border-slate-300 overflow-hidden">
-                {/* Mobile card view */}
-                <div className="sm:hidden divide-y divide-slate-200">
-                  {selectedAlert.rows.map((r, i) => {
-                    const delayed = isRowDelayed(r);
-                    const jobNum = toText(r['Job Number']);
-                    const partsInfo = selectedAlert.id === 'general-parts'
-                      ? getPartsInfoForJob(jobNum, partsData)
-                      : null;
-                    const glassParts = selectedAlert.id === 'glass-install-after-delivery'
-                      ? getGlassPartsForJob(jobNum, partsData)
-                      : null;
-                    return (
-                      <div
-                        key={`${selectedAlert.id}-card-${i}`}
-                        className={`p-3 space-y-1 text-sm ${delayed ? 'bg-red-50' : 'bg-white'}`}
-                      >
-                        <p className="font-semibold text-blue-700">{jobNum}</p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                          <p><span className="font-semibold text-slate-500">Priority:</span> {toText(r['Priority'])}</p>
-                          <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
-                        </div>
-                        <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
-                        <p><span className="font-semibold text-slate-500">Days:</span> <span className={delayed ? 'font-bold text-red-600' : ''}>{toText(r['Status Days'])}</span></p>
-                        {partsInfo && (
-                          <div>
-                            {partsInfo.arrived.length > 0 && <p><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</p>}
-                            {partsInfo.missing.length > 0 && <p><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</p>}
-                            {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && <p className="text-slate-400 italic">No parts data</p>}
-                          </div>
-                        )}
-                        {glassParts && (
-                          <div>
-                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
-                            {glassParts.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-0.5">
-                                {glassParts.map((gp, gi) => (
-                                  <span key={gi} className={`text-xs font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
-                                    {gp.arrived ? '✓' : '⏳'} {gp.name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {!partsInfo && !glassParts && (
-                          <div>
-                            {toText(r['Task Titles']) && <p><span className="font-semibold text-slate-500">Tasks:</span> {toText(r['Task Titles'])}</p>}
-                            {formatDate(r['Body ECD']) && <p><span className="font-semibold text-slate-500">Body ECD:</span> {formatDate(r['Body ECD'])}</p>}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
                 {/* Desktop table view */}
                 <table className="hidden md:table w-full text-sm">
                   <thead className="bg-slate-50">
@@ -1856,13 +1810,20 @@ export default function Page() {
                           {partsInfo ? (
                             <td className="p-3 max-w-md">
                               {partsInfo.arrived.length > 0 && (
-                                <span><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</span>
-                              )}
-                              {partsInfo.arrived.length > 0 && partsInfo.missing.length > 0 && (
-                                <span className="mx-1">·</span>
+                                <div className="mb-1"><span className="font-bold">Arrived:</span> {partsInfo.arrived.join(', ')}</div>
                               )}
                               {partsInfo.missing.length > 0 && (
-                                <span><span className="font-bold">Missing:</span> {partsInfo.missing.join(', ')}</span>
+                                <div>
+                                  <span className="font-bold">Missing:</span>
+                                  <ul className="mt-0.5 space-y-0.5">
+                                    {partsInfo.missing.map((m, mi) => (
+                                      <li key={mi} className="text-xs">
+                                        {m.name}
+                                        {m.eta ? <span className="text-slate-500"> · ETA {m.eta}</span> : <span className="italic text-slate-400"> · no ETA</span>}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
                               )}
                               {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && (
                                 <span className="text-slate-400 italic">No parts data</span>
@@ -1932,7 +1893,17 @@ export default function Page() {
                             <p><span className="font-semibold">Arrived:</span> {partsInfo.arrived.join(', ')}</p>
                           )}
                           {partsInfo.missing.length > 0 && (
-                            <p><span className="font-semibold">Missing:</span> {partsInfo.missing.join(', ')}</p>
+                            <div className="mt-1">
+                              <span className="font-semibold">Missing:</span>
+                              <ul className="mt-0.5 ml-1 space-y-0.5">
+                                {partsInfo.missing.map((m, mi) => (
+                                  <li key={mi}>
+                                    · {m.name}
+                                    {m.eta ? <span className="text-slate-500"> — ETA {m.eta}</span> : <span className="italic text-slate-400"> — no ETA</span>}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           )}
                           {partsInfo.arrived.length === 0 && partsInfo.missing.length === 0 && (
                             <p className="italic text-slate-400">No parts data</p>
