@@ -379,6 +379,10 @@ function getPartEta(part: PartsRow): string {
   return toText(getColumnValue(part, ['ETA', 'eta', 'Eta']));
 }
 
+function getPartStatus(part: PartsRow): string {
+  return toText(getColumnValue(part, ['Status', 'status']));
+}
+
 function daysSince(date: Date): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -511,8 +515,11 @@ function buildWeHavePartsMatches(
 
   // Stock parts = rows whose Job column is a stock-inventory sentinel
   // ('000', '#000', or plain 0). Must also have a Model or Make to match.
+  // Exclude any that have been checked out (Status column says "Checked Out")
+  // since those parts are no longer in the container.
   const stockParts = partsData.filter((p) => {
     if (!isStockJob(getPartJobNumber(p))) return false;
+    if (normalize(getPartStatus(p)).includes('checked out')) return false;
     return !!(normalize(getPartModel(p)) || normalize(getPartMake(p)));
   });
 
@@ -1206,7 +1213,7 @@ export default function Page() {
       count: weHavePartsMatches.length,
       rows: [],
       description: 'Stock (Job 000) parts that match vehicles currently in the lot',
-      info: 'Scans the PARTS sheet for rows whose Job column is a stock-inventory sentinel (#000, 000, or 0) and matches their Model and Make (sometimes the Make is written in the Model field on the cycle time sheet) to any vehicle currently in Vehicle On-Site, Insurance Approval, Repair Approved, PDR Approved, PDR In-Progress, or Post Repair. The goal is to use up old stock before ordering new parts.',
+      info: 'Scans the PARTS sheet for rows whose Job column is a stock-inventory sentinel (#000, 000, or 0) and Status is NOT "Checked Out", then matches their Model and Make (sometimes the Make is written in the Model field on the cycle time sheet) to any vehicle currently in Vehicle On-Site, Insurance Approval, Repair Approved, PDR Approved, PDR In-Progress, or Post Repair. The goal is to use up old stock before ordering new parts.',
       section: 'Inventory',
       detailType: 'we-have-parts',
     },
