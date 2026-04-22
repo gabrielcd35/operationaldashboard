@@ -1251,6 +1251,30 @@ export default function Page() {
 
   const allAlertCards = useMemo(() => [...alertCards, ...inventoryAlertCards], [alertCards, inventoryAlertCards]);
 
+  // Map of normalized job number → list of alert titles that contain that job.
+  // Used by the search dropdown to show a red pill for each alert a job is in.
+  const alertsByJob = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const add = (jobNumber: string, title: string) => {
+      const key = normalize(jobNumber);
+      if (!key) return;
+      const existing = map.get(key);
+      if (existing) {
+        if (!existing.includes(title)) existing.push(title);
+      } else {
+        map.set(key, [title]);
+      }
+    };
+    for (const card of alertCards) {
+      if (card.count === 0) continue;
+      for (const r of card.rows) add(toText(r['Job Number']), card.title);
+    }
+    for (const g of mustReturnGroups) add(g.jobNumber, 'Must Return');
+    for (const g of missingInstallGroups) add(g.jobNumber, 'Missing Install / Not Checked Out');
+    for (const m of weHavePartsMatches) add(m.vehicleJobNumber, 'We have parts!');
+    return map;
+  }, [alertCards, mustReturnGroups, missingInstallGroups, weHavePartsMatches]);
+
   const grouped = useMemo(() => ({
     Operations: alertCards.filter((a) => a.section === 'Operations'),
     Parts: alertCards.filter((a) => a.section === 'Parts'),
@@ -1452,20 +1476,37 @@ export default function Page() {
               />
               {searchOpen && jobSearchResults.length > 0 && (
                 <ul className="absolute right-0 z-50 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
-                  {jobSearchResults.map((r, i) => (
-                    <li
-                      key={i}
-                      className="flex flex-col gap-0.5 px-4 py-2.5 text-sm hover:bg-slate-50 cursor-default border-b border-slate-100 last:border-0"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="font-semibold text-slate-900">{toText(r['Job Number'])}</span>
-                        {toText(r['Model']) && (
-                          <span className="text-xs text-slate-600">{toText(r['Model'])}</span>
+                  {jobSearchResults.map((r, i) => {
+                    const jobNum = toText(r['Job Number']);
+                    const jobAlerts = alertsByJob.get(normalize(jobNum)) ?? [];
+                    return (
+                      <li
+                        key={i}
+                        className="flex flex-col gap-0.5 px-4 py-2.5 text-sm hover:bg-slate-50 cursor-default border-b border-slate-100 last:border-0"
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="font-semibold text-slate-900">{jobNum}</span>
+                          {toText(r['Model']) && (
+                            <span className="text-xs text-slate-600">{toText(r['Model'])}</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-slate-500">{toText(r['Status + Priority'])}</span>
+                        {jobAlerts.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {jobAlerts.map((title, ai) => (
+                              <span
+                                key={ai}
+                                title={title}
+                                className="rounded-full bg-red-500 text-white text-[10px] font-semibold px-2 py-0.5 leading-tight"
+                              >
+                                {title}
+                              </span>
+                            ))}
+                          </div>
                         )}
-                      </div>
-                      <span className="text-xs text-slate-500">{toText(r['Status + Priority'])}</span>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {searchOpen && jobSearch.trim() !== '' && jobSearchResults.length === 0 && (
