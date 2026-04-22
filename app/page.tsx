@@ -590,9 +590,23 @@ function buildWeHavePartsMatches(
     }
   }
 
-  return Array.from(byJob.values()).sort((a, b) =>
-    a.vehicleJobNumber.localeCompare(b.vehicleJobNumber, undefined, { numeric: true })
-  );
+  // Custom status order for the alert detail display.
+  const statusOrder = (statusPriority: string): number => {
+    const s = normalize(statusPriority);
+    if (s === 'vehicle on-site') return 1;
+    if (s.includes('insurance approval')) return 2;
+    if (s.includes('repair approved')) return 3;
+    if (s === 'pdr in-progress' || s === 'e - ehi repair') return 4;
+    if (s === 'conventional (hail)') return 5;
+    if (s === 'post repair') return 6;
+    return 99;
+  };
+
+  return Array.from(byJob.values()).sort((a, b) => {
+    const orderDiff = statusOrder(a.statusPriority) - statusOrder(b.statusPriority);
+    if (orderDiff !== 0) return orderDiff;
+    return a.vehicleJobNumber.localeCompare(b.vehicleJobNumber, undefined, { numeric: true });
+  });
 }
 
 function buildMustReturnGroups(
