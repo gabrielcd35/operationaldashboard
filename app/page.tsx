@@ -496,6 +496,8 @@ function buildMissingInstallGroups(
 type WeHavePartsMatch = {
   vehicleJobNumber: string;
   statusPriority: string;
+  vehicleModel: string;
+  isNew: boolean;
   parts: { name: string; year: string; make: string; model: string }[];
 };
 
@@ -553,6 +555,8 @@ function buildWeHavePartsMatches(
           byJob.set(jn, {
             vehicleJobNumber: jn,
             statusPriority: toText(r['Status + Priority']),
+            vehicleModel: toText(r['Model']),
+            isNew: isVehicleOnSite(r) || isInsuranceApproval(r),
             parts: [partEntry],
           });
         }
@@ -1427,7 +1431,12 @@ export default function Page() {
                       key={i}
                       className="flex flex-col gap-0.5 px-4 py-2.5 text-sm hover:bg-slate-50 cursor-default border-b border-slate-100 last:border-0"
                     >
-                      <span className="font-semibold text-slate-900">{toText(r['Job Number'])}</span>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="font-semibold text-slate-900">{toText(r['Job Number'])}</span>
+                        {toText(r['Model']) && (
+                          <span className="text-xs text-slate-600">{toText(r['Model'])}</span>
+                        )}
+                      </div>
                       <span className="text-xs text-slate-500">{toText(r['Status + Priority'])}</span>
                     </li>
                   ))}
@@ -1769,7 +1778,13 @@ export default function Page() {
                       ));
                       return (
                         <div key={`wh-m-${i}`} className="p-3 bg-white space-y-1 text-sm">
-                          <p className="font-semibold text-blue-700">{m.vehicleJobNumber}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-blue-700">{m.vehicleJobNumber}</span>
+                            {m.isNew && (
+                              <span className="rounded-full bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide">New</span>
+                            )}
+                          </div>
+                          {m.vehicleModel && <p className="text-xs text-slate-500">{m.vehicleModel}</p>}
                           <p><span className="font-semibold text-slate-500">Status:</span> {m.statusPriority}</p>
                           <p><span className="font-semibold text-slate-500">Parts ({m.parts.length}):</span> {m.parts.map((p) => p.name).join(', ')}</p>
                           {fits.length > 0 && (
@@ -1796,7 +1811,15 @@ export default function Page() {
                         ));
                         return (
                           <tr key={`wh-${i}`} className="border-b border-slate-200 align-top bg-white">
-                            <td className="p-3 font-semibold text-blue-700">{m.vehicleJobNumber}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-blue-700">{m.vehicleJobNumber}</span>
+                                {m.isNew && (
+                                  <span className="rounded-full bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide">New</span>
+                                )}
+                              </div>
+                              {m.vehicleModel && <div className="text-xs text-slate-500 mt-0.5">{m.vehicleModel}</div>}
+                            </td>
                             <td className="p-3">{m.statusPriority}</td>
                             <td className="p-3">
                               <span className="text-xs font-semibold text-slate-500">({m.parts.length}) </span>
