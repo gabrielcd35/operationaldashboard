@@ -470,23 +470,28 @@ function buildMissingInstallGroups(
     const jn = normalize(jnRaw);
     if (!jn || isStockJob(jnRaw)) return false;
 
-    const hasOrdered    = !isBlank(getColumnValue(p, orderedAtKeys));
-    const hasReceived   = !isBlank(getColumnValue(p, receivedAtKeys));
-    const hasCheckedOut = !isBlank(getColumnValue(p, checkedOutKeys));
-    const hasReturned   = !isBlank(getColumnValue(p, returnedAtKeys));
+    const status = normalize(getPartStatus(p));
+    const hasOrderedDate    = !isBlank(getColumnValue(p, orderedAtKeys));
+    const hasReceivedDate   = !isBlank(getColumnValue(p, receivedAtKeys));
+    const hasCheckedOutDate = !isBlank(getColumnValue(p, checkedOutKeys));
+    const hasReturnedDate   = !isBlank(getColumnValue(p, returnedAtKeys));
 
-    // Must be "in the pipeline": either ordered or received.
-    if (!hasOrdered && !hasReceived) return false;
-    // If it's already returned, nothing to do.
-    if (hasReturned) return false;
+    // Treat either a date OR a Status column word as the signal.
+    const isReturned   = hasReturnedDate   || status.includes('returned');
+    const isCheckedOut = hasCheckedOutDate || status.includes('checked out');
+    const isReceived   = hasReceivedDate   || status.includes('received');
+    const isOrdered    = hasOrderedDate    || status.includes('ordered');
+
+    if (isReturned) return false;
+    if (!isOrdered && !isReceived) return false;
 
     // Path 1: job is currently Post Repair / Ready to Deliver / Delivered.
     if (qualifyingJobs.has(jn)) {
-      return !hasReceived || !hasCheckedOut;
+      return !isReceived || !isCheckedOut;
     }
     // Path 2: job is NOT in Sheet1 at all (vehicle left the lot).
     if (!allSheetJobs.has(jn)) {
-      return !hasCheckedOut;
+      return !isCheckedOut;
     }
     return false;
   });
@@ -495,7 +500,8 @@ function buildMissingInstallGroups(
   for (const part of flaggedParts) {
     const jn = getPartJobNumber(part);
     const jnKey = normalize(jn);
-    const received = !isBlank(getColumnValue(part, receivedAtKeys));
+    const status = normalize(getPartStatus(part));
+    const received = !isBlank(getColumnValue(part, receivedAtKeys)) || status.includes('received');
     const existing = groups.get(jnKey);
     const item = { name: getPartName(part), received };
     if (existing) {
