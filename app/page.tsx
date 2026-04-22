@@ -385,6 +385,13 @@ function daysSince(date: Date): number {
   return Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+// Job numbers used for stock inventory rather than a real vehicle.
+// Seen in the PARTS sheet as "000", "#000", or sometimes stored as plain 0.
+function isStockJob(rawJobNumber: unknown): boolean {
+  const jn = toText(rawJobNumber).replace(/^#/, '').toLowerCase();
+  return jn === '000' || jn === '0';
+}
+
 function getPartsInfoForJob(
   jobNumber: string,
   partsData: PartsRow[]
@@ -438,7 +445,7 @@ function buildMissingInstallGroups(
   for (const r of rows) {
     if (isPostRepair(r) || isReadyToDeliver(r) || isVehicleDeliveredHail(r)) {
       const jn = normalize(toText(r['Job Number']));
-      if (jn && jn !== '000') qualifyingJobs.set(jn, toText(r['Status + Priority']));
+      if (jn && !isStockJob(jn)) qualifyingJobs.set(jn, toText(r['Status + Priority']));
     }
   }
 
@@ -448,11 +455,15 @@ function buildMissingInstallGroups(
 
   const flaggedParts = partsData.filter((p) => {
     const jn = normalize(getPartJobNumber(p));
-    if (!jn || jn === '000') return false;
+    if (!jn || isStockJob(getPartJobNumber(p))) return false;
     if (!qualifyingJobs.has(jn)) return false;
-    if (isBlank(getColumnValue(p, orderedAtKeys))) return false;
+    // Part is "in the pipeline" if either Ordered At OR Received At is set.
+    const hasOrdered  = !isBlank(getColumnValue(p, orderedAtKeys));
+    const hasReceived = !isBlank(getColumnValue(p, receivedAtKeys));
+    if (!hasOrdered && !hasReceived) return false;
+    // Something is missing: Received At still blank OR Checked Out At still blank.
     return (
-      isBlank(getColumnValue(p, receivedAtKeys)) ||
+      !hasReceived ||
       isBlank(getColumnValue(p, checkedOutKeys))
     );
   });
@@ -656,7 +667,7 @@ function buildMustReturnGroups(
   const groups = new Map<string, { parts: string[]; maxDays: number }>();
   for (const part of qualifying) {
     const jn = getPartJobNumber(part);
-    if (normalize(jn) === '000') continue;
+    if (isStockJob(jn)) continue;
     if (!jn) continue;
     const received = getReceivedAt(part)!;
     const days = daysSince(received);
