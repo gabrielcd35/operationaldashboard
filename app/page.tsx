@@ -863,7 +863,14 @@ function buildMainCards(rows: DashboardRow[]): MainCard[] {
   const postRepairRows = sortByPriority(rows.filter(isPostRepair));
   const readyRows = sortByPriority(rows.filter(isReadyToDeliver));
   const onSiteRows = sortByPriority(rows.filter(isVehicleOnSite));
-  const deliveredRows = sortByPriority(rows.filter(isVehicleDeliveredHail));
+  const deliveredRows = sortByPriority(rows.filter((r) => {
+    const s = normalize(r['Status + Priority']);
+    return (
+      isVehicleDeliveredHail(r) ||
+      s.includes('pending supplement') ||
+      s.includes('waiting on payment')
+    );
+  }));
 
   return [
     {
@@ -1339,27 +1346,43 @@ export default function Page() {
   }, [selectedMain]);
 
   const deliveredHailStats = useMemo(() => {
-    const deliveredRows = rows.filter(isVehicleDeliveredHail);
-    
+    // Delivered Hail + Pending Supplement + Waiting on Payment all roll into this card.
+    const deliveredRows = rows.filter((r) => {
+      const s = normalize(r['Status + Priority']);
+      return (
+        isVehicleDeliveredHail(r) ||
+        s.includes('pending supplement') ||
+        s.includes('waiting on payment')
+      );
+    });
+
     const approvalTimeValues = deliveredRows.map((r) => toNumber(r['Approval Time'])).filter((v) => v > 0);
     const pendingPdrValues = deliveredRows.map((r) => toNumber(r['Approved Pending PDR'])).filter((v) => v > 0);
     const repairTimeValues = deliveredRows.map((r) => toNumber(r['Repair Time'])).filter((v) => v > 0);
     const deliveryTimeValues = deliveredRows.map((r) => toNumber(r['Delivery Time'])).filter((v) => v > 0);
 
-    const totalTimeValues = deliveredRows.map((r) =>
+    // Bonus-calc total: PDR wait is halved (pre-existing rule).
+    const bonusTotalValues = deliveredRows.map((r) =>
       (toNumber(r['Approved Pending PDR']) / 2) + toNumber(r['Repair Time']) + toNumber(r['Delivery Time'])
     ).filter((v) => v > 0);
 
+    // True cycle time: full PDR wait, no halving.
+    const cycleTimeValues = deliveredRows.map((r) =>
+      toNumber(r['Approved Pending PDR']) + toNumber(r['Repair Time']) + toNumber(r['Delivery Time'])
+    ).filter((v) => v > 0);
+
     const avgApproval = average(approvalTimeValues);
-    const avgTotal = average(totalTimeValues);
+    const avgTotal = average(bonusTotalValues);
+    const avgCycle = average(cycleTimeValues);
     const count = deliveredRows.length;
 
     return {
       avgApprovalTime: avgApproval,
-      avgApprovedPendingPdr: average(pendingPdrValues) / 2, 
+      avgApprovedPendingPdr: average(pendingPdrValues) / 2,
       avgRepairTime: average(repairTimeValues),
       avgDeliveryTime: average(deliveryTimeValues),
       avgApprovedToDelivered: avgTotal,
+      avgCycleTime: avgCycle,
       repairRate: repairBonusRate(avgTotal),
       approvalRate: approvalBonusRate(avgApproval),
       deliveredCount: count,
@@ -2336,6 +2359,7 @@ export default function Page() {
                     { label: 'Avg PDR/2', val: formatDays(deliveredHailStats.avgApprovedPendingPdr) },
                     { label: 'Avg Repair', val: formatDays(deliveredHailStats.avgRepairTime) },
                     { label: 'Avg Deliv', val: formatDays(deliveredHailStats.avgDeliveryTime) },
+                    { label: 'Avg Cycle', val: formatDays(deliveredHailStats.avgCycleTime) },
                   ].map((stat, i) => (
                     <div key={i} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">{stat.label}</p>
