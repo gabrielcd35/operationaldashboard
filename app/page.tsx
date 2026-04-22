@@ -445,6 +445,13 @@ function buildMissingInstallGroups(
   partsData: PartsRow[],
   rows: DashboardRow[]
 ): MissingInstallGroup[] {
+  // All jobs present in Sheet1 (cycle time), regardless of status.
+  const allSheetJobs = new Map<string, string>();
+  for (const r of rows) {
+    const jn = normalize(toText(r['Job Number']));
+    if (jn && !isStockJob(jn)) allSheetJobs.set(jn, toText(r['Status + Priority']));
+  }
+  // Qualifying jobs: Post Repair, Ready to Deliver, Vehicle Delivered (Hail).
   const qualifyingJobs = new Map<string, string>();
   for (const r of rows) {
     if (isPostRepair(r) || isReadyToDeliver(r) || isVehicleDeliveredHail(r)) {
@@ -456,35 +463,54 @@ function buildMissingInstallGroups(
   const orderedAtKeys   = ['Ordered At', 'ordered at', 'ordered_at'];
   const receivedAtKeys  = ['Received At', 'received at', 'received_at'];
   const checkedOutKeys  = ['Checked Out At', 'checked out at', 'checked_out_at'];
+  const returnedAtKeys  = ['Returned At', 'returned at', 'returned_at'];
 
   const flaggedParts = partsData.filter((p) => {
-    const jn = normalize(getPartJobNumber(p));
-    if (!jn || isStockJob(getPartJobNumber(p))) return false;
-    if (!qualifyingJobs.has(jn)) return false;
-    // Part is "in the pipeline" if either Ordered At OR Received At is set.
-    const hasOrdered  = !isBlank(getColumnValue(p, orderedAtKeys));
-    const hasReceived = !isBlank(getColumnValue(p, receivedAtKeys));
-    if (!hasOrdered && !hasReceived) return false;
-    // Something is missing: Received At still blank OR Checked Out At still blank.
-    return (
-      !hasReceived ||
-      isBlank(getColumnValue(p, checkedOutKeys))
-    );
+    const jnRaw = getPartJobNumber(p);
+    const jn = normalize(jnRaw);
+    if (!jn || isStockJob(jnRaw)) return false;
+
+    const status = normalize(getPartStatus(p));
+    const hasOrderedDate    = !isBlank(getColumnValue(p, orderedAtKeys));
+    const hasReceivedDate   = !isBlank(getColumnValue(p, receivedAtKeys));
+    const hasCheckedOutDate = !isBlank(getColumnValue(p, checkedOutKeys));
+    const hasReturnedDate   = !isBlank(getColumnValue(p, returnedAtKeys));
+
+    // Treat either a date OR a Status column word as the signal.
+    const isReturned   = hasReturnedDate   || status.includes('returned');
+    const isCheckedOut = hasCheckedOutDate || status.includes('checked out');
+    const isReceived   = hasReceivedDate   || status.includes('received');
+    const isOrdered    = hasOrderedDate    || status.includes('ordered');
+
+    if (isReturned) return false;
+    if (!isOrdered && !isReceived) return false;
+
+    // Path 1: job is currently Post Repair / Ready to Deliver / Delivered.
+    if (qualifyingJobs.has(jn)) {
+      return !isReceived || !isCheckedOut;
+    }
+    // Path 2: job is NOT in Sheet1 at all (vehicle left the lot).
+    if (!allSheetJobs.has(jn)) {
+      return !isCheckedOut;
+    }
+    return false;
   });
 
   const groups = new Map<string, MissingInstallGroup>();
   for (const part of flaggedParts) {
     const jn = getPartJobNumber(part);
     const jnKey = normalize(jn);
-    const received = !isBlank(getColumnValue(part, receivedAtKeys));
+    const status = normalize(getPartStatus(part));
+    const received = !isBlank(getColumnValue(part, receivedAtKeys)) || status.includes('received');
     const existing = groups.get(jnKey);
     const item = { name: getPartName(part), received };
     if (existing) {
       existing.items.push(item);
     } else {
+      const status = qualifyingJobs.get(jnKey) ?? '⚠️ Vehicle no longer in Sheet1';
       groups.set(jnKey, {
         jobNumber: jn,
-        statusPriority: qualifyingJobs.get(jnKey) ?? '',
+        statusPriority: status,
         items: [item],
       });
     }
@@ -1206,8 +1232,8 @@ export default function Page() {
       title: 'Missing Install / Not Checked Out',
       count: missingInstallGroups.length,
       rows: [],
-      description: 'Post Repair / Ready to Deliver / Delivered jobs with parts not received or checked out',
-      info: 'For jobs where Status + Priority is Post Repair, Ready to Deliver, or Vehicle Delivered (Hail), flags parts that have an Ordered At date but are missing either Received At or Checked Out At. Helps catch parts that need check-out before install, or install that was skipped before delivery. Ignores job 000.',
+      description: 'Post Repair / Ready to Deliver / Delivered jobs + vehicles that left the lot with parts outstanding',
+      info: 'For jobs where Status + Priority is Post Repair, Ready to Deliver, or Vehicle Delivered (Hail), flags parts that have Ordered At or Received At but are missing Received At or Checked Out At. Also flags any part (ordered or received, not returned and not checked out) whose job number no longer appears in Sheet1 — catching vehicles that already left the lot with a part still outstanding. Ignores job #000.',
       section: 'Inventory',
       detailType: 'missing-install',
     },
