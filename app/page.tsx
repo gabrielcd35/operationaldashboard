@@ -1366,10 +1366,10 @@ export default function Page() {
       (toNumber(r['Approved Pending PDR']) / 2) + toNumber(r['Repair Time']) + toNumber(r['Delivery Time'])
     ).filter((v) => v > 0);
 
-    // True cycle time: full PDR wait, no halving.
-    const cycleTimeValues = deliveredRows.map((r) =>
-      toNumber(r['Approved Pending PDR']) + toNumber(r['Repair Time']) + toNumber(r['Delivery Time'])
-    ).filter((v) => v > 0);
+    // True cycle time comes from the 'Cycle/On-Site Time' column on Sheet1.
+    const cycleTimeValues = deliveredRows
+      .map((r) => toNumber(r['Cycle/On-Site Time']))
+      .filter((v) => v > 0);
 
     const avgApproval = average(approvalTimeValues);
     const avgTotal = average(bonusTotalValues);
