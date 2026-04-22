@@ -582,7 +582,7 @@ function buildWeHavePartsMatches(
             vehicleJobNumber: jn,
             statusPriority: toText(r['Status + Priority']),
             vehicleModel: toText(r['Model']),
-            isNew: isVehicleOnSite(r) || isInsuranceApproval(r),
+            isNew: isVehicleOnSite(r) || isInsuranceApproval(r) || isRepairApproved(r),
             parts: [partEntry],
           });
         }
