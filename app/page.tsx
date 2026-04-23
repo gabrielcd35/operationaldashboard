@@ -343,10 +343,6 @@ function getPartName(part: PartsRow): string {
   return toText(getColumnValue(part, ['Part', 'part', 'Part Name', 'part name']));
 }
 
-function getOrderedAt(part: PartsRow): Date | null {
-  return parseDateValue(getColumnValue(part, ['Ordered At', 'ordered at', 'ordered_at']));
-}
-
 function getReceivedAt(part: PartsRow): Date | null {
   return parseDateValue(getColumnValue(part, ['Received At', 'received at', 'received_at']));
 }
@@ -369,10 +365,6 @@ function getPartMake(part: PartsRow): string {
 
 function getPartYear(part: PartsRow): string {
   return toText(getColumnValue(part, ['Year', 'year']));
-}
-
-function getSetKey(part: PartsRow): string {
-  return toText(getColumnValue(part, ['Set Key', 'set key', 'SetKey', 'set_key']));
 }
 
 function getPartEta(part: PartsRow): string {
@@ -970,14 +962,50 @@ function getSaCounts(rows: DashboardRow[]) {
 
 const FLIP_W = 14, FLIP_H = 22, FLIP_FONT = 16;
 
+// Hoisted half-panel for the flip digit. Centers the digit in full FLIP_H
+// space and clips to half, so the same digit element can show its top or
+// bottom portion depending on `half`.
+function FlipHalf({ digit, half }: { digit: string; half: 'top' | 'bottom' }) {
+  const isTop = half === 'top';
+  return (
+    <div style={{
+      position: 'absolute',
+      top: isTop ? 0 : FLIP_H / 2,
+      left: 0, right: 0,
+      height: FLIP_H / 2,
+      overflow: 'hidden',
+      background: isTop ? '#ffffff' : '#f2f2f2',
+      borderRadius: isTop ? '2px 2px 0 0' : '0 0 2px 2px',
+      border: '1px solid #222',
+      borderTop: isTop ? '1px solid #222' : 'none',
+      borderBottom: isTop ? 'none' : '1px solid #222',
+    }}>
+      <div style={{
+        height: FLIP_H,
+        marginTop: isTop ? 0 : -(FLIP_H / 2),
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{
+          fontFamily: '"Courier New", Courier, monospace',
+          fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111',
+          userSelect: 'none', lineHeight: 1,
+        }}>{digit}</span>
+      </div>
+    </div>
+  );
+}
+
 function FlipDigit({ value }: { value: string }) {
   const [display, setDisplay] = useState(value);
   const [pending, setPending] = useState<string | null>(null);
   const [phase, setPhase] = useState<'idle' | 'top' | 'bottom'>('idle');
   const displayRef = useRef(value);
 
+  // Triggering the flip animation when `value` changes requires setState from
+  // within an effect — that's the whole point of this visual component.
   useEffect(() => {
     if (value !== displayRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPending(value);
       setPhase('top');
     }
@@ -996,54 +1024,16 @@ function FlipDigit({ value }: { value: string }) {
     setPhase('idle');
   }, []);
 
-  // Uses wrapper trick: centers digit in full FLIP_H space, clips to half
-  function HalfPanel({ digit, half, extra }: { digit: string; half: 'top' | 'bottom'; extra?: React.CSSProperties }) {
-    const isTop = half === 'top';
-    return (
-      <div style={{
-        position: 'absolute',
-        top: isTop ? 0 : FLIP_H / 2,
-        left: 0, right: 0,
-        height: FLIP_H / 2,
-        overflow: 'hidden',
-        background: isTop ? '#ffffff' : '#f2f2f2',
-        borderRadius: isTop ? '2px 2px 0 0' : '0 0 2px 2px',
-        border: '1px solid #222',
-        borderTop: isTop ? '1px solid #222' : 'none',
-        borderBottom: isTop ? 'none' : '1px solid #222',
-        ...extra,
-      }}>
-        <div style={{
-          height: FLIP_H,
-          marginTop: isTop ? 0 : -(FLIP_H / 2),
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <span style={{
-            fontFamily: '"Courier New", Courier, monospace',
-            fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111',
-            userSelect: 'none', lineHeight: 1,
-          }}>{digit}</span>
-        </div>
-      </div>
-    );
-  }
-
   const shown  = phase === 'idle' ? display : (pending ?? display);
   const bottom = phase === 'bottom' ? (pending ?? display) : display;
 
   return (
     <div style={{ position: 'relative', width: FLIP_W, height: FLIP_H, display: 'inline-block' }}>
-      <HalfPanel digit={shown}   half="top" />
-      <HalfPanel digit={bottom}  half="bottom" />
+      <FlipHalf digit={shown}   half="top" />
+      <FlipHalf digit={bottom}  half="bottom" />
       {/* Center divider */}
       <div style={{ position: 'absolute', top: FLIP_H / 2 - 0.5, left: 0, right: 0, height: 1, background: '#444', zIndex: 5 }} />
       {/* Flip top — old digit folding away */}
-      {phase === 'top' && (
-        <HalfPanel digit={display} half="top"
-          extra={{ transformOrigin: 'bottom center', zIndex: 10 } as React.CSSProperties}
-        />
-      )}
-      {/* We can't put className on HalfPanel directly, so wrap */}
       {phase === 'top' && (
         <div className="flip-top-out" onAnimationEnd={handleTopEnd}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, height: FLIP_H / 2, transformOrigin: 'bottom center', zIndex: 20, overflow: 'hidden', background: '#ffffff', borderRadius: '2px 2px 0 0', border: '1px solid #222', borderBottom: 'none' }}>
@@ -1195,7 +1185,7 @@ export default function Page() {
     }
   }, [data.updatedAt]);
 
-  const rows = data.rows ?? [];
+  const rows = useMemo(() => data.rows ?? [], [data.rows]);
 
   const partsData = useMemo((): PartsRow[] => {
     const rawRows = data.partsRows;
