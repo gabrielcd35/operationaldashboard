@@ -411,20 +411,31 @@ function getPartsInfoForJob(
   return { arrived, missing };
 }
 
+type GlassPartStatus = 'received' | 'not-arrived';
+
 function getGlassPartsForJob(
   jobNumber: string,
   partsData: PartsRow[]
-): { name: string; arrived: boolean }[] {
+): { name: string; status: GlassPartStatus }[] {
   const glassTerms = ['quarter glass', 'windshield'];
   const jobParts = partsData.filter(
     (p) => normalize(getPartJobNumber(p)) === normalize(jobNumber)
   );
+  const receivedKeys = ['Received At', 'received at', 'received_at'];
+  const orderedKeys  = ['Ordered At',  'ordered at',  'ordered_at'];
   return jobParts
     .filter((p) => glassTerms.some((term) => normalize(getPartName(p)).includes(term)))
-    .map((p) => ({
-      name: getPartName(p),
-      arrived: !isBlank(getColumnValue(p, ['Received At', 'received at', 'received_at'])),
-    }));
+    .map((p) => {
+      const status = normalize(getPartStatus(p));
+      const hasReceived = !isBlank(getColumnValue(p, receivedKeys)) || status.includes('received');
+      const hasOrdered  = !isBlank(getColumnValue(p, orderedKeys))  || status.includes('ordered');
+      return {
+        name: getPartName(p),
+        status: hasReceived ? 'received' as GlassPartStatus
+              : hasOrdered  ? 'not-arrived' as GlassPartStatus
+              : 'not-arrived' as GlassPartStatus,
+      };
+    });
 }
 
 type MissingInstallGroup = {
@@ -1960,10 +1971,10 @@ export default function Page() {
                       <th className="p-3 text-left font-semibold">Status Days</th>
                       {selectedAlert.id === 'general-parts' ? (
                         <th className="p-3 text-left font-semibold">Parts</th>
-                      ) : selectedAlert.id === 'glass-install-after-delivery' ? (
+                      ) : (selectedAlert.id === 'glass-install-after-delivery' || selectedAlert.id === 'schedule-glass-install') ? (
                         <>
                           <th className="p-3 text-left font-semibold">Task Titles</th>
-                          <th className="p-3 text-left font-semibold">Glass Parts</th>
+                          <th className="p-3 text-left font-semibold">Parts to Install</th>
                         </>
                       ) : (
                         <>
@@ -1980,7 +1991,7 @@ export default function Page() {
                       const partsInfo = selectedAlert.id === 'general-parts'
                         ? getPartsInfoForJob(jobNum, partsData)
                         : null;
-                      const glassParts = selectedAlert.id === 'glass-install-after-delivery'
+                      const glassParts = (selectedAlert.id === 'glass-install-after-delivery' || selectedAlert.id === 'schedule-glass-install')
                         ? getGlassPartsForJob(jobNum, partsData)
                         : null;
                       return (
@@ -2032,12 +2043,12 @@ export default function Page() {
                                   <ul className="space-y-0.5">
                                     {glassParts.map((gp, gi) => (
                                       <li key={gi} className="flex items-center gap-1.5 text-xs">
-                                        <span className={gp.arrived ? 'text-green-600 font-bold' : 'text-orange-500 font-bold'}>
-                                          {gp.arrived ? '✓' : '⏳'}
+                                        <span className={gp.status === 'received' ? 'text-green-600 font-bold' : 'text-orange-500 font-bold'}>
+                                          {gp.status === 'received' ? '✓' : '⏳'}
                                         </span>
                                         <span>{gp.name}</span>
-                                        <span className={`text-[10px] font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
-                                          {gp.arrived ? 'Arrived' : 'Pending'}
+                                        <span className={`text-[10px] font-semibold ${gp.status === 'received' ? 'text-green-600' : 'text-orange-500'}`}>
+                                          {gp.status === 'received' ? 'Received' : 'Not arrived'}
                                         </span>
                                       </li>
                                     ))}
@@ -2066,7 +2077,7 @@ export default function Page() {
                   const partsInfo = selectedAlert.id === 'general-parts'
                     ? getPartsInfoForJob(jobNum, partsData)
                     : null;
-                  const glassParts = selectedAlert.id === 'glass-install-after-delivery'
+                  const glassParts = (selectedAlert.id === 'glass-install-after-delivery' || selectedAlert.id === 'schedule-glass-install')
                     ? getGlassPartsForJob(jobNum, partsData)
                     : null;
                   return (
@@ -2113,19 +2124,19 @@ export default function Page() {
                         <div className="mt-2 text-xs text-slate-700 space-y-1">
                           <p><span className="font-semibold">Task Titles:</span> {toText(r['Task Titles']) || <span className="italic text-slate-400">—</span>}</p>
                           <div>
-                            <p className="font-semibold">Glass Parts:</p>
+                            <p className="font-semibold">Parts to Install:</p>
                             {glassParts.length === 0 ? (
                               <p className="italic text-slate-400">None found</p>
                             ) : (
                               <ul className="space-y-0.5 mt-1">
                                 {glassParts.map((gp, gi) => (
                                   <li key={gi} className="flex items-center gap-1.5">
-                                    <span className={gp.arrived ? 'text-green-600 font-bold' : 'text-orange-500 font-bold'}>
-                                      {gp.arrived ? '✓' : '⏳'}
+                                    <span className={gp.status === 'received' ? 'text-green-600 font-bold' : 'text-orange-500 font-bold'}>
+                                      {gp.status === 'received' ? '✓' : '⏳'}
                                     </span>
                                     <span>{gp.name}</span>
-                                    <span className={`text-[10px] font-semibold ${gp.arrived ? 'text-green-600' : 'text-orange-500'}`}>
-                                      {gp.arrived ? 'Arrived' : 'Pending'}
+                                    <span className={`text-[10px] font-semibold ${gp.status === 'received' ? 'text-green-600' : 'text-orange-500'}`}>
+                                      {gp.status === 'received' ? 'Received' : 'Not arrived'}
                                     </span>
                                   </li>
                                 ))}
