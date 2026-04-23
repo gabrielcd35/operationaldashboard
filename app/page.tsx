@@ -699,8 +699,11 @@ function approvalBonusRate(avg: number): number {
 function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
   const needsSeverity = rows.filter((r) => {
     const filter = normalize(r['Filter']);
-    // Logic updated to match "ana", "roy", or "roy / ana"
-    return (filter === 'ana' || filter === 'roy' || filter === 'roy / ana') && isBlank(r['Severity']);
+    const hasAnaRoyFilter = filter === 'ana' || filter === 'roy' || filter === 'roy / ana';
+    const severityBlank = isBlank(r['Severity']);
+    const hasAssignSeverityTask = includesAny(r['Task Titles'], ['assign severity']);
+    // Match if (Ana/Roy filter with blank Severity) OR if Task Titles contains "Assign Severity"
+    return (hasAnaRoyFilter && severityBlank) || hasAssignSeverityTask;
   });
 
   const escalationOnSite = rows.filter((r) => {
@@ -768,7 +771,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
       count: needsSeverity.length,
       rows: sortByPriority(needsSeverity),
       description: 'Roy / Ana filters missing severity',
-      info: 'This alert appears when the Filter column is Ana, Roy, or Roy / Ana and the Severity field is blank.',
+      info: 'This alert appears when (1) the Filter column is Ana, Roy, or Roy / Ana AND the Severity field is blank, OR (2) Task Titles contains "Assign Severity".',
       section: 'Operations',
     },
     {
@@ -962,38 +965,14 @@ function getSaCounts(rows: DashboardRow[]) {
 
 const FLIP_W = 14, FLIP_H = 22, FLIP_FONT = 16;
 
-// Hoisted half-panel for the flip digit. Centers the digit in full FLIP_H
-// space and clips to half, so the same digit element can show its top or
-// bottom portion depending on `half`.
-function FlipHalf({ digit, half }: { digit: string; half: 'top' | 'bottom' }) {
-  const isTop = half === 'top';
-  return (
-    <div style={{
-      position: 'absolute',
-      top: isTop ? 0 : FLIP_H / 2,
-      left: 0, right: 0,
-      height: FLIP_H / 2,
-      overflow: 'hidden',
-      background: isTop ? '#ffffff' : '#f2f2f2',
-      borderRadius: isTop ? '2px 2px 0 0' : '0 0 2px 2px',
-      border: '1px solid #222',
-      borderTop: isTop ? '1px solid #222' : 'none',
-      borderBottom: isTop ? 'none' : '1px solid #222',
-    }}>
-      <div style={{
-        height: FLIP_H,
-        marginTop: isTop ? 0 : -(FLIP_H / 2),
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <span style={{
-          fontFamily: '"Courier New", Courier, monospace',
-          fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111',
-          userSelect: 'none', lineHeight: 1,
-        }}>{digit}</span>
-      </div>
-    </div>
-  );
-}
+const flipNumSpanStyle: React.CSSProperties = {
+  fontFamily: '"Courier New", Courier, monospace',
+  fontSize: FLIP_FONT,
+  fontWeight: 'bold',
+  color: '#111',
+  userSelect: 'none',
+  lineHeight: 1,
+};
 
 function FlipDigit({ value }: { value: string }) {
   const [display, setDisplay] = useState(value);
@@ -1029,8 +1008,26 @@ function FlipDigit({ value }: { value: string }) {
 
   return (
     <div style={{ position: 'relative', width: FLIP_W, height: FLIP_H, display: 'inline-block' }}>
-      <FlipHalf digit={shown}   half="top" />
-      <FlipHalf digit={bottom}  half="bottom" />
+      {/* Static top half — shows the digit that will be visible after the flip */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: FLIP_H / 2,
+        overflow: 'hidden', background: '#ffffff', borderRadius: '2px 2px 0 0',
+        border: '1px solid #222', borderBottom: 'none',
+      }}>
+        <div style={{ height: FLIP_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={flipNumSpanStyle}>{shown}</span>
+        </div>
+      </div>
+      {/* Static bottom half */}
+      <div style={{
+        position: 'absolute', top: FLIP_H / 2, left: 0, right: 0, height: FLIP_H / 2,
+        overflow: 'hidden', background: '#f2f2f2', borderRadius: '0 0 2px 2px',
+        border: '1px solid #222', borderTop: 'none',
+      }}>
+        <div style={{ height: FLIP_H, marginTop: -(FLIP_H / 2), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={flipNumSpanStyle}>{bottom}</span>
+        </div>
+      </div>
       {/* Center divider */}
       <div style={{ position: 'absolute', top: FLIP_H / 2 - 0.5, left: 0, right: 0, height: 1, background: '#444', zIndex: 5 }} />
       {/* Flip top — old digit folding away */}
@@ -1038,7 +1035,7 @@ function FlipDigit({ value }: { value: string }) {
         <div className="flip-top-out" onAnimationEnd={handleTopEnd}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, height: FLIP_H / 2, transformOrigin: 'bottom center', zIndex: 20, overflow: 'hidden', background: '#ffffff', borderRadius: '2px 2px 0 0', border: '1px solid #222', borderBottom: 'none' }}>
           <div style={{ height: FLIP_H, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontFamily: '"Courier New", Courier, monospace', fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111', userSelect: 'none', lineHeight: 1 }}>{display}</span>
+            <span style={flipNumSpanStyle}>{display}</span>
           </div>
         </div>
       )}
@@ -1047,7 +1044,7 @@ function FlipDigit({ value }: { value: string }) {
         <div className="flip-bottom-in" onAnimationEnd={handleBottomEnd}
           style={{ position: 'absolute', top: FLIP_H / 2, left: 0, right: 0, height: FLIP_H / 2, transformOrigin: 'top center', zIndex: 20, overflow: 'hidden', background: '#f2f2f2', borderRadius: '0 0 2px 2px', border: '1px solid #222', borderTop: 'none' }}>
           <div style={{ height: FLIP_H, marginTop: -(FLIP_H / 2), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontFamily: '"Courier New", Courier, monospace', fontSize: FLIP_FONT, fontWeight: 'bold', color: '#111', userSelect: 'none', lineHeight: 1 }}>{pending ?? display}</span>
+            <span style={flipNumSpanStyle}>{pending ?? display}</span>
           </div>
         </div>
       )}
