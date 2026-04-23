@@ -1952,7 +1952,26 @@ export default function Page() {
                   <p className="mt-1 text-slate-600">{selectedAlert.count} matching job(s)</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => handleCopyRows(selectedAlert.rows)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (selectedAlert.id === 'schedule-glass-install' || selectedAlert.id === 'glass-install-after-delivery') {
+                        const text = selectedAlert.rows.map((r) => {
+                          const jn = toText(r['Job Number']);
+                          const model = toText(r['Model']);
+                          const parts = getGlassPartsForJob(jn, partsData);
+                          const partsStr = parts.length > 0
+                            ? parts.map((gp) => `${gp.name} (${gp.status === 'received' ? 'Received' : 'Not arrived'})`).join(', ')
+                            : 'None found';
+                          const prefix = model ? `${jn} ${model}` : jn;
+                          return `${prefix} - Parts to install: ${partsStr}`;
+                        }).join('\n');
+                        handleCopyText(text);
+                      } else {
+                        handleCopyRows(selectedAlert.rows);
+                      }
+                    }}
+                    className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium flex items-center gap-2"
+                  >
                     <span>📋</span><span>Copy Jobs</span>
                   </button>
                   <button onClick={() => setSelectedAlertId(null)} className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium">Clear</button>
