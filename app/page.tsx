@@ -1424,6 +1424,8 @@ export default function Page() {
             {easterEggActive ? (
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 autoFocus
                 value={easterEggInput}
                 onChange={(e) => {
@@ -1516,6 +1518,7 @@ export default function Page() {
                   {jobSearchResults.map((r, i) => {
                     const jobNum = toText(r['Job Number']);
                     const jobAlerts = alertsByJob.get(normalize(jobNum)) ?? [];
+                    const severityTxt = toText(r['Severity']);
                     return (
                       <li
                         key={i}
@@ -1527,7 +1530,12 @@ export default function Page() {
                             <span className="text-xs text-slate-600">{toText(r['Model'])}</span>
                           )}
                         </div>
-                        <span className="text-xs text-slate-500">{toText(r['Status + Priority'])}</span>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-xs text-slate-500">{toText(r['Status + Priority'])}</span>
+                          {severityTxt && (
+                            <span className="text-xs text-slate-500 whitespace-nowrap">Sev.: {severityTxt}</span>
+                          )}
+                        </div>
                         {jobAlerts.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {jobAlerts.map((title, ai) => (
@@ -1960,7 +1968,7 @@ export default function Page() {
                     <tr className="border-b border-slate-300">
                       <th className="p-3 text-left font-semibold">Job Number</th>
                       <th className="p-3 text-left font-semibold">Priority</th>
-                      <th className="p-3 text-left font-semibold">Model</th>
+                      <th className="p-3 text-left font-semibold">Severity</th>
                       <th className="p-3 text-left font-semibold">Status + Priority</th>
                       <th className="p-3 text-left font-semibold">Status Days</th>
                       {selectedAlert.id === 'general-parts' ? (
@@ -1993,9 +2001,14 @@ export default function Page() {
                           key={`${selectedAlert.id}-row-${i}`}
                           className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}
                         >
-                          <td className="p-3 font-medium">{jobNum}</td>
+                          <td className="p-3">
+                            <div className="font-medium">{jobNum}</div>
+                            {toText(r['Model']) && (
+                              <div className="text-xs text-slate-500 mt-0.5">{toText(r['Model'])}</div>
+                            )}
+                          </td>
                           <td className="p-3 font-semibold">{toText(r['Priority'])}</td>
-                          <td className="p-3">{toText(r['Model'])}</td>
+                          <td className="p-3">{toText(r['Severity'])}</td>
                           <td className="p-3">{toText(r['Status + Priority'])}</td>
                           <td className={`p-3 ${delayed ? 'font-bold text-red-600' : ''}`}>
                             {toText(r['Status Days'])}
@@ -2072,13 +2085,20 @@ export default function Page() {
                   return (
                     <div key={`m-${selectedAlert.id}-${i}`} className={`rounded-2xl border p-4 text-sm ${delayed ? 'bg-red-50 border-red-300' : 'bg-white border-slate-300'}`}>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-lg font-bold text-blue-700">{jobNum}</span>
+                        <div>
+                          <div className="text-lg font-bold text-blue-700 leading-tight">{jobNum}</div>
+                          {toText(r['Model']) && (
+                            <div className="text-xs text-slate-500">{toText(r['Model'])}</div>
+                          )}
+                        </div>
                         <span className="text-xs font-bold uppercase tracking-wide">P: {toText(r['Priority'])}</span>
                       </div>
-                      <p className="mt-1 text-slate-700">{toText(r['Model'])}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                         <span className="rounded-full bg-slate-100 px-2 py-0.5">{toText(r['Status + Priority'])}</span>
                         <span className={delayed ? 'font-bold text-red-600' : 'font-medium text-slate-700'}>Days: {toText(r['Status Days'])}</span>
+                        {toText(r['Severity']) && (
+                          <span className="text-slate-600">Sev.: {toText(r['Severity'])}</span>
+                        )}
                       </div>
                       {partsInfo ? (
                         <div className="mt-2 text-xs text-slate-700">
@@ -2423,10 +2443,15 @@ export default function Page() {
                     const delayed = isRowDelayed(r);
                     return (
                       <div key={i} className={`p-3 space-y-1 text-sm ${delayed ? 'bg-red-50' : 'bg-white'}`}>
-                        <p className="font-bold text-blue-700">{toText(r['Job Number'])}</p>
+                        <div className="font-bold text-blue-700 leading-tight">{toText(r['Job Number'])}</div>
+                        {toText(r['Model']) && (
+                          <div className="text-xs text-slate-500">{toText(r['Model'])}</div>
+                        )}
                         <div className="flex flex-wrap gap-x-4 gap-y-0.5">
                           <p><span className="font-semibold text-slate-500">Priority:</span> <span className="font-bold">{toText(r['Priority'])}</span></p>
-                          <p><span className="font-semibold text-slate-500">Model:</span> {toText(r['Model'])}</p>
+                          {toText(r['Severity']) && (
+                            <p><span className="font-semibold text-slate-500">Sev.:</span> {toText(r['Severity'])}</p>
+                          )}
                         </div>
                         <p><span className="font-semibold text-slate-500">Status:</span> {toText(r['Status + Priority'])}</p>
                         <div className="flex flex-wrap gap-x-4 gap-y-0.5">
@@ -2452,7 +2477,7 @@ export default function Page() {
                     <tr className="border-b border-slate-300">
                       <th className="p-3 font-semibold">Job Number</th>
                       <th className="p-3 font-semibold">Priority</th>
-                      <th className="p-3 font-semibold">Model</th>
+                      <th className="p-3 font-semibold">Severity</th>
                       <th className="p-3 font-semibold">Status + Priority</th>
                       <th className="p-3 font-semibold">Status Days</th>
                       <th className="p-3 font-semibold">SA</th>
@@ -2466,9 +2491,14 @@ export default function Page() {
                       const delayed = isRowDelayed(r);
                       return (
                         <tr key={i} className={`border-b border-slate-200 align-top ${delayed ? 'bg-red-50' : 'bg-white'}`}>
-                          <td className="p-3 font-bold text-blue-700">{toText(r['Job Number'])}</td>
+                          <td className="p-3">
+                            <div className="font-bold text-blue-700">{toText(r['Job Number'])}</div>
+                            {toText(r['Model']) && (
+                              <div className="text-xs text-slate-500 mt-0.5">{toText(r['Model'])}</div>
+                            )}
+                          </td>
                           <td className="p-3 font-bold">{toText(r['Priority'])}</td>
-                          <td className="p-3">{toText(r['Model'])}</td>
+                          <td className="p-3">{toText(r['Severity'])}</td>
                           <td className="p-3">{toText(r['Status + Priority'])}</td>
                           <td className={`p-3 ${delayed ? 'font-bold text-red-600' : 'font-medium'}`}>{toText(r['Status Days'])}</td>
                           <td className="p-3">{toText(r['SA'])}</td>
