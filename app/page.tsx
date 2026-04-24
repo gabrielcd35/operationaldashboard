@@ -1407,7 +1407,12 @@ export default function Page() {
         {/* Header */}
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
-            <h1 className="text-3xl font-bold">Operations Manager Dashboard</h1>
+            <h1
+              className="text-5xl uppercase tracking-wide"
+              style={{ fontFamily: 'var(--font-anton), "Futura", "Arial Narrow", sans-serif' }}
+            >
+              Operations Manager Dashboard
+            </h1>
           </div>
           <div className="mt-2 flex items-center gap-2">
             <FlipClock seconds={countdown} />
