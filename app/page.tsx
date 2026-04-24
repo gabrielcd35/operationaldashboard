@@ -249,7 +249,7 @@ function getSaMonthlyQcIssues(row: DashboardRow): string[] {
 function buildSaMonthlyQcBuckets(rows: DashboardRow[]): SaMonthlyQcBucket[] {
   const buckets = new Map<string, SaMonthlyQcItem[]>();
 
-  for (const row of rows.filter(isDeliveredOrPostDelivery)) {
+  for (const row of rows.filter((r) => isDeliveredOrPostDelivery(r) && isHailJobType(r))) {
     const issues = getSaMonthlyQcIssues(row);
     if (issues.length === 0) continue;
 
@@ -318,6 +318,11 @@ function isVehicleOnSite(row: DashboardRow): boolean {
 
 function isVehicleDeliveredHail(row: DashboardRow): boolean {
   return normalize(row['Status + Priority']) === 'vehicle delivered (hail)';
+}
+
+// True when the Job Type column is "Hail" (case-insensitive).
+function isHailJobType(row: DashboardRow): boolean {
+  return normalize(row['Job Type']) === 'hail';
 }
 
 // Vehicle Delivered (Hail) + its post-delivery states:
@@ -764,7 +769,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
   });
 
   const saMonthlyQc = rows.filter((r) => {
-    return isDeliveredOrPostDelivery(r) && getSaMonthlyQcIssues(r).length > 0;
+    return isDeliveredOrPostDelivery(r) && isHailJobType(r) && getSaMonthlyQcIssues(r).length > 0;
   });
 
   const generalParts = rows.filter((r) => {
@@ -842,7 +847,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
       count: saMonthlyQc.length,
       rows: sortByPriority(saMonthlyQc),
       description: 'Delivered hail jobs with date or QC inconsistencies',
-      info: 'This alert checks Vehicle Delivered (Hail), Pending Supplement, Waiting on Payment, Ready to Pay, and Archived jobs; it flags missing start, repair approved, or end dates, date order inconsistencies, and QC Not Completed entries marked FLAG. The detail view groups every flagged job by SA.',
+      info: 'This alert checks Hail jobs (Job Type = Hail) in Vehicle Delivered (Hail), Pending Supplement, Waiting on Payment, Ready to Pay, or Archived status; it flags missing start, repair approved, or end dates, date order inconsistencies, and QC Not Completed entries marked FLAG. The detail view groups every flagged job by SA.',
       section: 'Operations',
       detailType: 'sa-monthly-qc',
     },
@@ -911,7 +916,7 @@ function buildMainCards(rows: DashboardRow[]): MainCard[] {
   const postRepairRows = sortByPriority(rows.filter(isPostRepair));
   const readyRows = sortByPriority(rows.filter(isReadyToDeliver));
   const onSiteRows = sortByPriority(rows.filter(isVehicleOnSite));
-  const deliveredRows = sortByPriority(rows.filter(isDeliveredOrPostDelivery));
+  const deliveredRows = sortByPriority(rows.filter((r) => isDeliveredOrPostDelivery(r) && isHailJobType(r)));
 
   return [
     {
@@ -1379,8 +1384,8 @@ export default function Page() {
   }, [selectedMain]);
 
   const deliveredHailStats = useMemo(() => {
-    // Delivered Hail + its post-delivery statuses all roll into this card.
-    const deliveredRows = rows.filter(isDeliveredOrPostDelivery);
+    // Delivered Hail + its post-delivery statuses — Hail job type only.
+    const deliveredRows = rows.filter((r) => isDeliveredOrPostDelivery(r) && isHailJobType(r));
 
     const approvalTimeValues = deliveredRows.map((r) => toNumber(r['Approval Time'])).filter((v) => v > 0);
     const pendingPdrValues = deliveredRows.map((r) => toNumber(r['Approved Pending PDR'])).filter((v) => v > 0);
