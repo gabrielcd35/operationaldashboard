@@ -249,7 +249,7 @@ function getSaMonthlyQcIssues(row: DashboardRow): string[] {
 function buildSaMonthlyQcBuckets(rows: DashboardRow[]): SaMonthlyQcBucket[] {
   const buckets = new Map<string, SaMonthlyQcItem[]>();
 
-  for (const row of rows.filter(isVehicleDeliveredHail)) {
+  for (const row of rows.filter(isDeliveredOrPostDelivery)) {
     const issues = getSaMonthlyQcIssues(row);
     if (issues.length === 0) continue;
 
@@ -318,6 +318,19 @@ function isVehicleOnSite(row: DashboardRow): boolean {
 
 function isVehicleDeliveredHail(row: DashboardRow): boolean {
   return normalize(row['Status + Priority']) === 'vehicle delivered (hail)';
+}
+
+// Vehicle Delivered (Hail) + its post-delivery states:
+// Pending Supplement, Waiting on Payment, Ready to Pay, Archived.
+function isDeliveredOrPostDelivery(row: DashboardRow): boolean {
+  if (isVehicleDeliveredHail(row)) return true;
+  const s = normalize(row['Status + Priority']);
+  return (
+    s.includes('pending supplement') ||
+    s.includes('waiting on payment') ||
+    s.includes('ready to pay') ||
+    s.includes('archived')
+  );
 }
 
 // --- Delay Logic ---
@@ -494,7 +507,7 @@ function buildMissingInstallGroups(
   // Qualifying jobs: Post Repair, Ready to Deliver, Vehicle Delivered (Hail).
   const qualifyingJobs = new Map<string, string>();
   for (const r of rows) {
-    if (isPostRepair(r) || isReadyToDeliver(r) || isVehicleDeliveredHail(r)) {
+    if (isPostRepair(r) || isReadyToDeliver(r) || isDeliveredOrPostDelivery(r)) {
       const jn = normalize(toText(r['Job Number']));
       if (jn && !isStockJob(jn)) qualifyingJobs.set(jn, toText(r['Status + Priority']));
     }
@@ -751,7 +764,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
   });
 
   const saMonthlyQc = rows.filter((r) => {
-    return isVehicleDeliveredHail(r) && getSaMonthlyQcIssues(r).length > 0;
+    return isDeliveredOrPostDelivery(r) && getSaMonthlyQcIssues(r).length > 0;
   });
 
   const generalParts = rows.filter((r) => {
@@ -785,7 +798,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
 
   const glassInstallAfterDelivery = rows.filter((r) => {
     return (
-      isVehicleDeliveredHail(r) &&
+      isDeliveredOrPostDelivery(r) &&
       includesAny(r['Task Titles'], [
         'glass install (both)',
         'glass install',
@@ -829,7 +842,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
       count: saMonthlyQc.length,
       rows: sortByPriority(saMonthlyQc),
       description: 'Delivered hail jobs with date or QC inconsistencies',
-      info: 'This alert checks Vehicle Delivered (Hail) jobs and flags missing start, repair approved, or end dates, date order inconsistencies, and QC Not Completed entries marked FLAG. The detail view groups every flagged job by SA.',
+      info: 'This alert checks Vehicle Delivered (Hail), Pending Supplement, Waiting on Payment, Ready to Pay, and Archived jobs; it flags missing start, repair approved, or end dates, date order inconsistencies, and QC Not Completed entries marked FLAG. The detail view groups every flagged job by SA.',
       section: 'Operations',
       detailType: 'sa-monthly-qc',
     },
@@ -866,7 +879,7 @@ function buildAlertCards(rows: DashboardRow[]): AlertCard[] {
       count: glassInstallAfterDelivery.length,
       rows: sortByPriority(glassInstallAfterDelivery),
       description: 'Glass related tasks still active after delivery',
-      info: 'This alert appears when Task Titles contains Glass Install (Both), Glass Install, Order Windshield, Glass Received, or Install Quarter Glass and Status + Priority is Vehicle Delivered (Hail).',
+      info: 'This alert appears when Task Titles contains Glass Install (Both), Glass Install, Order Windshield, Glass Received, or Install Quarter Glass and Status + Priority is Vehicle Delivered (Hail), Pending Supplement, Waiting on Payment, Ready to Pay, or Archived.',
       section: 'Parts',
     },
     {
@@ -898,14 +911,7 @@ function buildMainCards(rows: DashboardRow[]): MainCard[] {
   const postRepairRows = sortByPriority(rows.filter(isPostRepair));
   const readyRows = sortByPriority(rows.filter(isReadyToDeliver));
   const onSiteRows = sortByPriority(rows.filter(isVehicleOnSite));
-  const deliveredRows = sortByPriority(rows.filter((r) => {
-    const s = normalize(r['Status + Priority']);
-    return (
-      isVehicleDeliveredHail(r) ||
-      s.includes('pending supplement') ||
-      s.includes('waiting on payment')
-    );
-  }));
+  const deliveredRows = sortByPriority(rows.filter(isDeliveredOrPostDelivery));
 
   return [
     {
@@ -1281,7 +1287,7 @@ export default function Page() {
       count: missingInstallGroups.length,
       rows: [],
       description: 'Post Repair / Ready to Deliver / Delivered jobs + vehicles that left the lot with parts outstanding',
-      info: 'For jobs where Status + Priority is Post Repair, Ready to Deliver, or Vehicle Delivered (Hail), flags parts that have Ordered At or Received At but are missing Received At or Checked Out At. Also flags any part (ordered or received, not returned and not checked out) whose job number no longer appears in Sheet1 — catching vehicles that already left the lot with a part still outstanding. Ignores job #000.',
+      info: 'For jobs where Status + Priority is Post Repair, Ready to Deliver, Vehicle Delivered (Hail), Pending Supplement, Waiting on Payment, Ready to Pay, or Archived, flags parts that have Ordered At or Received At but are missing Received At or Checked Out At. Also flags any part (ordered or received, not returned and not checked out) whose job number no longer appears in Sheet1 — catching vehicles that already left the lot with a part still outstanding. Ignores job #000.',
       section: 'Inventory',
       detailType: 'missing-install',
     },
@@ -1373,15 +1379,8 @@ export default function Page() {
   }, [selectedMain]);
 
   const deliveredHailStats = useMemo(() => {
-    // Delivered Hail + Pending Supplement + Waiting on Payment all roll into this card.
-    const deliveredRows = rows.filter((r) => {
-      const s = normalize(r['Status + Priority']);
-      return (
-        isVehicleDeliveredHail(r) ||
-        s.includes('pending supplement') ||
-        s.includes('waiting on payment')
-      );
-    });
+    // Delivered Hail + its post-delivery statuses all roll into this card.
+    const deliveredRows = rows.filter(isDeliveredOrPostDelivery);
 
     const approvalTimeValues = deliveredRows.map((r) => toNumber(r['Approval Time'])).filter((v) => v > 0);
     const pendingPdrValues = deliveredRows.map((r) => toNumber(r['Approved Pending PDR'])).filter((v) => v > 0);
