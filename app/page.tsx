@@ -527,6 +527,7 @@ type WeHavePartsMatch = {
   statusPriority: string;
   vehicleModel: string;
   isNew: boolean;
+  cycleTime: number;
   parts: { name: string; year: string; make: string; model: string }[];
 };
 
@@ -586,6 +587,7 @@ function buildWeHavePartsMatches(
             statusPriority: toText(r['Status + Priority']),
             vehicleModel: toText(r['Model']),
             isNew: isVehicleOnSite(r) || isInsuranceApproval(r) || isRepairApproved(r),
+            cycleTime: toNumber(r['Cycle/On-Site Time']),
             parts: [partEntry],
           });
         }
@@ -593,21 +595,11 @@ function buildWeHavePartsMatches(
     }
   }
 
-  // Custom status order for the alert detail display.
-  const statusOrder = (statusPriority: string): number => {
-    const s = normalize(statusPriority);
-    if (s === 'vehicle on-site') return 1;
-    if (s.includes('insurance approval')) return 2;
-    if (s.includes('repair approved')) return 3;
-    if (s === 'pdr in-progress' || s === 'e - ehi repair') return 4;
-    if (s === 'conventional (hail)') return 5;
-    if (s === 'post repair') return 6;
-    return 99;
-  };
-
+  // Sort by Cycle/On-Site Time ascending (smallest to biggest). Ties
+  // broken by job number so the order stays stable.
   return Array.from(byJob.values()).sort((a, b) => {
-    const orderDiff = statusOrder(a.statusPriority) - statusOrder(b.statusPriority);
-    if (orderDiff !== 0) return orderDiff;
+    const diff = a.cycleTime - b.cycleTime;
+    if (diff !== 0) return diff;
     return a.vehicleJobNumber.localeCompare(b.vehicleJobNumber, undefined, { numeric: true });
   });
 }
@@ -1895,6 +1887,9 @@ export default function Page() {
                             )}
                           </div>
                           {m.vehicleModel && <p className="text-xs text-slate-500">{m.vehicleModel}</p>}
+                          <span className="inline-block rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 leading-tight">
+                            Cycle: {m.cycleTime}d
+                          </span>
                           <p><span className="font-semibold text-slate-500">Status:</span> {m.statusPriority}</p>
                           <p><span className="font-semibold text-slate-500">Parts ({m.parts.length}):</span> {m.parts.map((p) => p.name).join(', ')}</p>
                           {fits.length > 0 && (
@@ -1929,6 +1924,9 @@ export default function Page() {
                                 )}
                               </div>
                               {m.vehicleModel && <div className="text-xs text-slate-500 mt-0.5">{m.vehicleModel}</div>}
+                              <span className="inline-block rounded-full bg-slate-100 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 leading-tight mt-1">
+                                Cycle: {m.cycleTime}d
+                              </span>
                             </td>
                             <td className="p-3">{m.statusPriority}</td>
                             <td className="p-3">
