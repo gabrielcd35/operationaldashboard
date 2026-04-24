@@ -1408,8 +1408,13 @@ export default function Page() {
         <section className="rounded-3xl bg-white border border-slate-300 p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4">
             <h1
-              className="text-5xl uppercase tracking-wide"
-              style={{ fontFamily: 'var(--font-anton), "Futura", "Arial Narrow", sans-serif' }}
+              className="text-5xl uppercase tracking-wide italic"
+              style={{
+                fontFamily: 'var(--font-anton), "Futura", "Arial Narrow", sans-serif',
+                transform: 'skewX(-8deg)',
+                display: 'inline-block',
+                transformOrigin: 'left center',
+              }}
             >
               Operations Manager Dashboard
             </h1>
