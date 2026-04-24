@@ -1498,9 +1498,9 @@ export default function Page() {
         </section>
 
         {/* Main Stat Cards */}
-        <section className="space-y-4">
+        <section className="space-y-4 rounded-3xl border-2 border-indigo-300 bg-indigo-50/40 p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-2xl font-semibold">Main Information</h2>
+            <h2 className="text-2xl font-semibold text-indigo-900">Main Information</h2>
             <div ref={searchRef} className="relative w-64">
               <input
                 type="text"
@@ -1565,9 +1565,9 @@ export default function Page() {
                 key={card.id}
                 type="button"
                 onClick={() => { setSelectedMainId(card.id); setSelectedSa(null); }}
-                className={`rounded-2xl border p-4 text-left shadow-sm transition hover:shadow-md ${
-                  card.isDelayed ? 'bg-red-100 border-red-300' : 'bg-white border-slate-300'
-                } ${selectedMainId === card.id ? 'ring-2 ring-slate-900' : ''}`}
+                className={`rounded-2xl border-2 p-4 text-left shadow-sm transition hover:shadow-md ${
+                  card.isDelayed ? 'bg-red-100 border-red-400' : 'bg-white border-indigo-200'
+                } ${selectedMainId === card.id ? 'ring-2 ring-indigo-700' : ''}`}
               >
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-700 leading-tight">{card.title}</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{card.count}</p>
