@@ -441,7 +441,7 @@ function getGlassPartsForJob(
 type MissingInstallGroup = {
   jobNumber: string;
   statusPriority: string;
-  items: { name: string; received: boolean }[];
+  items: { name: string; received: boolean; eta: string }[];
 };
 
 function buildMissingInstallGroups(
@@ -506,7 +506,7 @@ function buildMissingInstallGroups(
     const status = normalize(getPartStatus(part));
     const received = !isBlank(getColumnValue(part, receivedAtKeys)) || status.includes('received');
     const existing = groups.get(jnKey);
-    const item = { name: getPartName(part), received };
+    const item = { name: getPartName(part), received, eta: getPartEta(part) };
     if (existing) {
       existing.items.push(item);
     } else {
@@ -1808,7 +1808,9 @@ export default function Page() {
                               </span>
                               <span>{it.name}</span>
                               <span className={`text-[10px] font-semibold ${it.received ? 'text-orange-500' : 'text-red-600'}`}>
-                                {it.received ? 'Received — Not Checked Out' : 'Not Received'}
+                                {it.received
+                                  ? 'Received — Not Checked Out'
+                                  : `Not Received${it.eta ? `, ETA ${it.eta}` : ''}`}
                               </span>
                             </li>
                           ))}
@@ -1839,7 +1841,9 @@ export default function Page() {
                                   </span>
                                   <span>{it.name}</span>
                                   <span className={`text-[10px] font-semibold ${it.received ? 'text-orange-500' : 'text-red-600'}`}>
-                                    {it.received ? 'Received — Not Checked Out' : 'Not Received'}
+                                    {it.received
+                                      ? 'Received — Not Checked Out'
+                                      : `Not Received${it.eta ? `, ETA ${it.eta}` : ''}`}
                                   </span>
                                 </li>
                               ))}
