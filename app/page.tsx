@@ -371,6 +371,43 @@ function getPartEta(part: PartsRow): string {
   return toText(getColumnValue(part, ['ETA', 'eta', 'Eta']));
 }
 
+// Build a live ETA string by combining the Ordered At date with the ETA
+// duration from the PARTS sheet. ETA column can look like "1 day", "3 days",
+// a plain "5", etc. If parsing fails or Ordered At is blank, falls back to
+// the raw ETA value.
+// Returns e.g. "1 day", "today", "3 days overdue".
+function computeLiveEta(part: PartsRow): string {
+  const raw = getPartEta(part).trim();
+  if (!raw) return '';
+
+  const match = raw.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return raw;
+  const etaDays = Number(match[1]);
+  if (!Number.isFinite(etaDays)) return raw;
+
+  const ordered = parseDateValue(
+    getColumnValue(part, ['Ordered At', 'ordered at', 'ordered_at'])
+  );
+  if (!ordered) return raw;
+
+  const expected = new Date(ordered);
+  expected.setDate(expected.getDate() + Math.round(etaDays));
+  expected.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.round(
+    (expected.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return '1 day';
+  if (diffDays > 1) return `${diffDays} days`;
+  if (diffDays === -1) return '1 day overdue';
+  return `${Math.abs(diffDays)} days overdue`;
+}
+
 function getPartStatus(part: PartsRow): string {
   return toText(getColumnValue(part, ['Status', 'status']));
 }
@@ -406,7 +443,7 @@ function getPartsInfoForJob(
       !isBlank(getColumnValue(p, orderedAtKeys)) &&
       isBlank(getColumnValue(p, receivedAtKeys))
     )
-    .map((p) => ({ name: getPartName(p), eta: getPartEta(p) }))
+    .map((p) => ({ name: getPartName(p), eta: computeLiveEta(p) }))
     .filter((m) => m.name);
   return { arrived, missing };
 }
@@ -506,7 +543,7 @@ function buildMissingInstallGroups(
     const status = normalize(getPartStatus(part));
     const received = !isBlank(getColumnValue(part, receivedAtKeys)) || status.includes('received');
     const existing = groups.get(jnKey);
-    const item = { name: getPartName(part), received, eta: getPartEta(part) };
+    const item = { name: getPartName(part), received, eta: computeLiveEta(part) };
     if (existing) {
       existing.items.push(item);
     } else {
